@@ -1,126 +1,75 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-[RequireComponent(typeof(NavMeshAgent))]
 public class BotAI_Proto : MonoBehaviour
 {
-    public enum State { Idle, Patrol, Chase, Attack }
-
-    [Header("Percepção")]
-    public float viewRadius = 15f;
-    [Range(0, 180)] public float viewAngle = 110f;
-    public LayerMask targetMask;  // Player
-    public LayerMask obstacleMask;  // Environment
-
-    [Header("Patrulha")]
     public Transform[] patrolPoints;
     public float waypointTolerance = 0.6f;
 
-    [Header("Chase")]
-    public float stoppingDistance = 2f;
+    [Header("Visão")]
+    public float viewRadius = 15f;
+    [Range(0,180)] public float viewAngle = 110f;
+    public LayerMask targetMask;    // Player
+    public LayerMask obstacleMask;  // Environment
     public float loseSightTime = 2f;
 
     NavMeshAgent agent;
-    State state = State.Idle;
-    int patrolIndex = -1;
     Transform target;
-    float losTimer;
+    int idx;
+    float loseTimer;
 
-    void Awake()
-    {
+    void Awake(){
         agent = GetComponent<NavMeshAgent>();
         if (patrolPoints != null && patrolPoints.Length > 0)
-            state = State.Patrol;
+            agent.SetDestination(patrolPoints[0].position);
     }
 
-    void Update()
-    {
+    void Update(){
         DetectPlayer();
 
-        switch (state)
-        {
-            case State.Idle:
-                if (target) state = State.Chase;
-                break;
+        if (target) {
+            // CHASE
+            agent.stoppingDistance = 2f;
+            agent.SetDestination(target.position);
 
-            case State.Patrol:
-                DoPatrol();
-                if (target) state = State.Chase;
-                break;
-
-            case State.Chase:
-                DoChase();
-                break;
-
-            case State.Attack:
-                if (!target) state = State.Patrol;
-                break;
+            if (!HasLineOfSight(target)) {
+                loseTimer += Time.deltaTime;
+                if (loseTimer > loseSightTime) { target = null; loseTimer = 0f; }
+            } else loseTimer = 0f;
         }
-    }
-
-    void DoPatrol()
-    {
-        if (!agent.hasPath || agent.remainingDistance < waypointTolerance)
-        {
-            patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
+        else {
+            // PATROL
             agent.stoppingDistance = 0f;
-            agent.SetDestination(patrolPoints[patrolIndex].position);
-        }
-    }
-
-    void DoChase()
-    {
-        if (!target) { state = State.Patrol; return; }
-
-        agent.stoppingDistance = stoppingDistance;
-        agent.SetDestination(target.position);
-
-        bool canSee = HasLineOfSight(target);
-        float dist = Vector3.Distance(transform.position, target.position);
-
-        if (canSee)
-        {
-            losTimer = 0f;
-            if (dist <= stoppingDistance + 0.5f) state = State.Attack;
-        }
-        else
-        {
-            losTimer += Time.deltaTime;
-            if (losTimer > loseSightTime)
-            {
-                losTimer = 0f;
-                target = null;
-                state = (patrolPoints.Length > 0) ? State.Patrol : State.Idle;
+            if (!agent.pathPending && agent.remainingDistance < waypointTolerance && patrolPoints.Length > 0){
+                idx = (idx + 1) % patrolPoints.Length;
+                agent.SetDestination(patrolPoints[idx].position);
             }
         }
     }
 
-    void DetectPlayer()
-    {
+    void DetectPlayer(){
+        // só procura se não tiver target
         if (target) return;
 
-        Collider[] hits = Physics.OverlapSphere(transform.position, viewRadius, targetMask);
-        foreach (var h in hits)
-        {
-            Transform cand = h.transform;
+        var hits = Physics.OverlapSphere(transform.position, viewRadius, targetMask);
+        foreach (var h in hits){
+            var cand = h.transform;
             Vector3 dir = (cand.position - transform.position).normalized;
-            if (Vector3.Angle(transform.forward, dir) < viewAngle * 0.5f && HasLineOfSight(cand))
-            {
+            if (Vector3.Angle(transform.forward, dir) <= viewAngle * 0.5f && HasLineOfSight(cand)){
                 target = cand;
-                state = State.Chase;
                 break;
             }
         }
     }
 
-    bool HasLineOfSight(Transform t)
-    {
+    bool HasLineOfSight(Transform t){
         Vector3 eyes = transform.position + Vector3.up * 1.2f;
         Vector3 dest = t.position + Vector3.up * 1.2f;
         Vector3 dir = dest - eyes;
-        if (Physics.Raycast(eyes, dir.normalized, out var hit, dir.magnitude, ~0))
+        if (Physics.Raycast(eyes, dir.normalized, out var hit, dir.magnitude))
         {
-            if (((1 << hit.collider.gameObject.layer) & obstacleMask) != 0) return false;
+            // se bateu noutro collider antes do target e esse collider está na obstacleMask, bloqueia
+            if (hit.transform != t && ((1 << hit.collider.gameObject.layer) & obstacleMask) != 0) return false;
         }
         return true;
     }
