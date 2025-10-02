@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 4820995970386180271}
   - component: {fileID: 3353205525096065713}
   - component: {fileID: -6465962347971376533}
+  - component: {fileID: 5528176311267628620}
   m_Layer: 0
   m_Name: Bot_Proto
   m_TagString: Untagged
@@ -160,3 +161,25 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   loseSightTime: 2
+--- !u!114 &5528176311267628620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7703748112432588966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c70b6345fe23f74cbe87231bb4b1b4e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  maxHealth: 100
+  team: 1
+  currentHealth: 0
+  isDead: 0
+  OnHealthChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDied:
+    m_PersistentCalls:
+      m_Calls: []

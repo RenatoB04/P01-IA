@@ -93,7 +93,7 @@ LightmapSettings:
     m_ExportTrainingData: 0
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
-  m_LightingDataAsset: {fileID: 112000000, guid: 8f67d6027df2095448a33b6776bda40b, type: 2}
+  m_LightingDataAsset: {fileID: 112000000, guid: 233fb0cb564715540aecf9fde1e96239, type: 2}
   m_LightingSettings: {fileID: 4890085278179872738, guid: 8cb9d78d2b5caec41b7d8f44745b8e79, type: 2}
 --- !u!196 &4
 NavMeshSettings:
@@ -24935,6 +24935,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2013926388}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2013926390}
   m_SourcePrefab: {fileID: 100100000, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
 --- !u!4 &2013926385 stripped
 Transform:
@@ -25026,6 +25029,28 @@ MonoBehaviour:
   m_DefaultActionMap: Player
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
+--- !u!114 &2013926390
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 652670280}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c70b6345fe23f74cbe87231bb4b1b4e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  maxHealth: 100
+  team: 0
+  currentHealth: 0
+  isDead: 0
+  OnHealthChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDied:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1001 &2017798661
 PrefabInstance:
   m_ObjectHideFlags: 0

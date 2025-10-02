@@ -39,10 +39,13 @@ public class Weapon : MonoBehaviour
 
     void Update()
     {
-        if (shootAction && shootAction.action.IsPressed() && Time.time >= nextFire)
+        if (shootAction && shootAction.action.WasPressedThisFrame())
         {
-            Shoot();
-            nextFire = Time.time + fireRate;
+            if (Time.time >= nextFire)
+            {
+                Shoot();
+                nextFire = Time.time + fireRate;
+            }
         }
     }
 
