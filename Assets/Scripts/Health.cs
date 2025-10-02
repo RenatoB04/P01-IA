@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Events;
+using TMPro;
 
 public class Health : MonoBehaviour
 {
@@ -15,10 +16,14 @@ public class Health : MonoBehaviour
     public UnityEvent<float, float> OnHealthChanged; 
     public UnityEvent OnDied;
 
+    [Header("UI (Opcional)")]
+    public TextMeshProUGUI healthText; // texto hp UI
+
     void Awake()
     {
         currentHealth = maxHealth;
         isDead = false;
+        UpdateHealthUI();
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
@@ -28,6 +33,7 @@ public class Health : MonoBehaviour
         if (team != -1 && instigatorTeam != -1 && team == instigatorTeam) return; // ff
 
         currentHealth = Mathf.Max(0, currentHealth - amount);
+        UpdateHealthUI();
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
         if (currentHealth <= 0 && !isDead)
@@ -41,6 +47,15 @@ public class Health : MonoBehaviour
     {
         if (isDead) return;
         currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+        UpdateHealthUI();
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+    }
+
+    void UpdateHealthUI()
+    {
+        if (healthText != null)
+        {
+            healthText.text = $"HP: {currentHealth}/{maxHealth}";
+        }
     }
 }
