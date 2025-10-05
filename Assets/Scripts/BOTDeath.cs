@@ -4,7 +4,7 @@ using UnityEngine;
 public class BOTDeath : MonoBehaviour
 {
     [Header("Refs")]
-    [Tooltip("Arrasta aqui o componente que tem a bool isDead/isdead.")]
+    [Tooltip("Componente que tem a bool isDead.")]
     public MonoBehaviour health;
     [Tooltip("Nome exato da bool no script de vida (case-sensitive).")]
     public string isDeadField = "isDead";

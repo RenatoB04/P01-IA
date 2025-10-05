@@ -58,7 +58,7 @@ public class FP_Controller_IS : MonoBehaviour
         stepOffsetOriginal = cc.stepOffset;
 
         if (cameraRoot) cameraRootBaseY = cameraRoot.localPosition.y;
-        else Debug.LogWarning("FP_Controller_IS: arrasta o CameraRoot no Inspector.");
+        else Debug.LogWarning("FP_Controller_IS: CameraRoot no Inspector.");
 
         cc.minMoveDistance = 0f;
         cc.slopeLimit = Mathf.Max(cc.slopeLimit, 45f);

@@ -9,8 +9,8 @@ public class BotAI_Proto : MonoBehaviour
     [Header("Visão")]
     public float viewRadius = 15f;
     [Range(0,180)] public float viewAngle = 110f;
-    public LayerMask targetMask;    // Player
-    public LayerMask obstacleMask;  // Environment
+    public LayerMask targetMask;
+    public LayerMask obstacleMask;
     public float loseSightTime = 2f;
 
     NavMeshAgent agent;

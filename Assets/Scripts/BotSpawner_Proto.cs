@@ -35,6 +35,6 @@ public class BotSpawner_Proto : MonoBehaviour
             }
         }
         
-        Debug.Log($"Spawned {count} bots!");
+        Debug.Log($"Spawned {count} bots.");
     }
 }
