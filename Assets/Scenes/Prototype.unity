@@ -11304,6 +11304,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4154229838992774, guid: 6f3724bc4d1d2874083cc1cd5227c922, type: 3}
   m_PrefabInstance: {fileID: 845549256}
   m_PrefabAsset: {fileID: 0}
+--- !u!137 &855853058 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 1894219050491974193, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
+  m_PrefabInstance: {fileID: 2013926384}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &857414132
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -25407,6 +25412,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2013926390}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2013926392}
     - targetCorrespondingSourceObject: {fileID: 8101567051441690793, guid: 7102c65ea39e37041925100d6f720a7d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1409919676}
@@ -25536,6 +25544,21 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   healthText: {fileID: 1997466746}
+--- !u!114 &2013926392
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 652670280}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5205b7d1c030de4ea243fb3cf4b6322, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LocalPlayerVisualHider
+  shadowsOnly: 1
+  targetRenderers:
+  - {fileID: 855853058}
 --- !u!1001 &2017798661
 PrefabInstance:
   m_ObjectHideFlags: 0
