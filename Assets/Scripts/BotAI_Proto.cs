@@ -88,7 +88,7 @@ public class BotAI_Proto : MonoBehaviour
         animator.SetFloat("Speed", speed);
 
         // (opcional) adicionar outros parâmetros, como "IsChasing"
-        animator.SetBool("IsChasing", target != null);
+        // animator.SetBool("IsChasing", target != null);
     }
 
     void DetectPlayer()
