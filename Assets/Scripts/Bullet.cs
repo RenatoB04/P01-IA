@@ -18,23 +18,24 @@ public class BulletProjectile : MonoBehaviour
     }
 
     void OnCollisionEnter(Collision c)
+{
+    if (ownerRoot && c.transform.root == ownerRoot)
+        return;
+
+    var h = c.collider.GetComponentInParent<Health>();
+    if (h)
     {
-        // Evita auto-hit (atingir quem disparou)
-        if (ownerRoot && c.transform.root == ownerRoot)
-            return;
+        Vector3 hitPos = c.GetContact(0).point;
 
-        var h = c.collider.GetComponentInParent<Health>();
-        if (h)
-        {
-            Vector3 hitPos = c.GetContact(0).point;
+        h.TakeDamageFrom(damage, ownerTeam, ownerRoot ? ownerRoot : transform, hitPos);
 
-            // Chama a nova função que ativa Damage Indicator se for o jogador
-            h.TakeDamageFrom(damage, ownerTeam, ownerRoot ? ownerRoot : transform, hitPos);
+        // HUD do jogador: dano causado
+        if (DamageFeedUI.Instance && ownerTeam == 1)
+            DamageFeedUI.Instance.Push(damage, isCrit: false, targetName: h.name);
 
-            // Hit marker (quando o jogador acerta num alvo)
-            CrosshairUI.Instance?.ShowHit();
-        }
-
-        Destroy(gameObject);
+        CrosshairUI.Instance?.ShowHit();
     }
+
+    Destroy(gameObject);
+}
 }
