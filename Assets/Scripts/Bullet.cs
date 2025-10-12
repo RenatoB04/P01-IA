@@ -21,9 +21,14 @@ public class BulletProjectile : MonoBehaviour
         else
         {
             var h = c.collider.GetComponentInParent<Health>();
-            if (h) h.TakeDamage(damage, ownerTeam);
+            if (h)
+            {
+                h.TakeDamage(damage, ownerTeam);
+                CrosshairUI.Instance?.ShowHit();
+            }
         }
 
         Destroy(gameObject);
     }
+
 }

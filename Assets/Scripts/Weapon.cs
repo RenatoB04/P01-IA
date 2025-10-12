@@ -189,6 +189,8 @@ public class Weapon : MonoBehaviour
         var fireClip = activeConfig ? activeConfig.fireSfx : null;
         if (fireAudio && fireClip) fireAudio.PlayOneShot(fireClip);
         else if (fireAudio && fireAudio.clip) fireAudio.PlayOneShot(fireAudio.clip);
+
+        CrosshairUI.Instance?.Kick();
     }
 
     // ---------- AMMO / RELOAD ----------
