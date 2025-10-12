@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 
@@ -19,6 +20,9 @@ public class BOTDeath : MonoBehaviour
     public Behaviour[] toDisableOnDeath;
     public Collider[]  collidersToDisable;
 
+    // >>> NOVO: evento para notificar listeners (ex.: Spawner) quando o bot morre
+    public event Action<BOTDeath> OnDied;
+
     bool handled;
 
     void Reset()
@@ -26,10 +30,16 @@ public class BOTDeath : MonoBehaviour
         collidersToDisable = GetComponentsInChildren<Collider>(true);
     }
 
+    void OnEnable()
+    {
+        // Caso este objeto volte a ser ativado (pooling), volta a permitir detetar a próxima morte
+        handled = false;
+    }
+
     void Update()
     {
         if (handled || health == null) return;
-        
+
         var t = health.GetType();
         var f = t.GetField(isDeadField);
         var p = t.GetProperty(isDeadField);
@@ -48,6 +58,9 @@ public class BOTDeath : MonoBehaviour
 
         if (collidersToDisable != null)
             foreach (var c in collidersToDisable) if (c) c.enabled = false;
+
+        // >>> NOVO: notifica quem estiver a ouvir que este bot morreu (antes de desaparecer)
+        try { OnDied?.Invoke(this); } catch { /* protege contra listeners com exceções */ }
 
         StartCoroutine(Disappear());
     }
