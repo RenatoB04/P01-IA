@@ -18,10 +18,13 @@ public class BOTDeath : MonoBehaviour
 
     [Header("Optional: parar IA/colisões antes de desaparecer")]
     public Behaviour[] toDisableOnDeath;
-    public Collider[]  collidersToDisable;
+    public Collider[] collidersToDisable;
 
-    // >>> NOVO: evento para notificar listeners (ex.: Spawner) quando o bot morre
+    // Evento por-instância (já usado pelo teu Spawner)
     public event Action<BOTDeath> OnDied;
+
+    // >>> NOVO: evento global para Score/Timer
+    public static event Action OnAnyBotKilled;
 
     bool handled;
 
@@ -32,7 +35,6 @@ public class BOTDeath : MonoBehaviour
 
     void OnEnable()
     {
-        // Caso este objeto volte a ser ativado (pooling), volta a permitir detetar a próxima morte
         handled = false;
     }
 
@@ -45,8 +47,8 @@ public class BOTDeath : MonoBehaviour
         var p = t.GetProperty(isDeadField);
 
         bool isDeadNow = false;
-        if (f != null && f.FieldType == typeof(bool))           isDeadNow = (bool)f.GetValue(health);
-        else if (p != null && p.PropertyType == typeof(bool))   isDeadNow = (bool)p.GetValue(health);
+        if (f != null && f.FieldType == typeof(bool)) isDeadNow = (bool)f.GetValue(health);
+        else if (p != null && p.PropertyType == typeof(bool)) isDeadNow = (bool)p.GetValue(health);
 
         if (!isDeadNow) return;
 
@@ -59,8 +61,9 @@ public class BOTDeath : MonoBehaviour
         if (collidersToDisable != null)
             foreach (var c in collidersToDisable) if (c) c.enabled = false;
 
-        // >>> NOVO: notifica quem estiver a ouvir que este bot morreu (antes de desaparecer)
-        try { OnDied?.Invoke(this); } catch { /* protege contra listeners com exceções */ }
+        // notificar antes de desaparecer
+        try { OnDied?.Invoke(this); } catch { }
+        try { OnAnyBotKilled?.Invoke(); } catch { }
 
         StartCoroutine(Disappear());
     }
