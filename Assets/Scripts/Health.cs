@@ -58,4 +58,11 @@ public class Health : MonoBehaviour
             healthText.text = $"HP: {currentHealth}/{maxHealth}";
         }
     }
+    public void ResetFullHealth()
+    {
+        isDead = false;
+        currentHealth = maxHealth;
+        UpdateHealthUI();
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
+    }
 }
