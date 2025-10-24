@@ -17592,7 +17592,7 @@ CharacterController:
   m_Enabled: 1
   serializedVersion: 3
   m_Height: 1.8
-  m_Radius: 0.3
+  m_Radius: 0.5
   m_SlopeLimit: 45
   m_StepOffset: 0.3
   m_SkinWidth: 0.01
@@ -17633,7 +17633,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathAndRespawn
   health: {fileID: 576617881}
-  spawnPoint: {fileID: 0}
+  spawnPoint: {fileID: 705793509}
   deathMenu: {fileID: 1546621771}
   respawnButton: {fileID: 1571434001}
   componentsToDisable:
@@ -21226,6 +21226,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4874802182062810, guid: e22de23c692942d42ba385bbbbfaebb4, type: 3}
   m_PrefabInstance: {fileID: 1986833499}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &705793508
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 705793509}
+  m_Layer: 0
+  m_Name: RespawnPlayer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &705793509
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 705793508}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 87.37, y: -0, z: 175.49}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &710087348 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4874802182062810, guid: e22de23c692942d42ba385bbbbfaebb4, type: 3}
@@ -67687,3 +67718,4 @@ SceneRoots:
   - {fileID: 1089775404}
   - {fileID: 532198694}
   - {fileID: 933351789}
+  - {fileID: 705793509}
