@@ -194,11 +194,15 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 128
-  loseSightTime: 2
+  loseSightChaseTime: 5
+  searchWaitTime: 5
+  attackDistance: 8
+  chaseDistance: 10
   healthThreshold: 0.3
   retreatSpeedMultiplier: 1.5
+  retreatReassessTime: 2
   animator: {fileID: 5117189200338216783}
-  speedMultiplier: 1
+  animationSpeedMultiplier: 1
 --- !u!114 &5528176311267628620
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,12 +1,22 @@
 using UnityEngine;
 using System.Collections;
 
+// NOTA: Não é preciso 'using System.Collections.Generic;'
+// A lógica de sorteio usa apenas arrays (Transform[]) e Random.Range (do UnityEngine)
+
 public class BotSpawner_Proto : MonoBehaviour
 {
     [Header("Configuração Inicial")]
     public GameObject botPrefab;
     public Transform[] spawnPoints;
-    public Transform[] patrolWaypoints;
+
+    // --- LINHA ANTIGA REMOVIDA ---
+    // public Transform[] patrolWaypoints;
+
+    // --- LINHA NOVA ---
+    [Tooltip("Arraste os OBJETOS-PAI (Path1, Path2, etc.) para aqui")]
+    public Transform[] allPatrolPaths; // Uma lista de todos os caminhos
+
     [Tooltip("Quantos bots devem existir em simultâneo.")]
     public int count = 3;
 
@@ -24,6 +34,13 @@ public class BotSpawner_Proto : MonoBehaviour
             Debug.LogError("Configura botPrefab e spawnPoints.");
             return;
         }
+
+        // --- NOVA VERIFICAÇÃO ---
+        if (allPatrolPaths == null || allPatrolPaths.Length == 0)
+        {
+            Debug.LogError("[BotSpawner_Proto] 'allPatrolPaths' não está configurado! Os bots não vão patrulhar.");
+        }
+        // --- FIM DA VERIFICAÇÃO ---
 
         SpawnBots();
     }
@@ -54,15 +71,39 @@ public class BotSpawner_Proto : MonoBehaviour
         var ai = bot.GetComponent<BotAI_Proto>();
         if (ai != null)
         {
-            // Apenas atribuimos os waypoints. O bot tratará do resto.
-            ai.patrolPoints = patrolWaypoints;
+            // --- NOVA LÓGICA DE PATRULHA ALEATÓRIA ---
+            if (allPatrolPaths != null && allPatrolPaths.Length > 0)
+            {
+                // 1. Escolhe um dos 5 caminhos ao acaso (ex: "Path3")
+                Transform randomPathObject = allPatrolPaths[Random.Range(0, allPatrolPaths.Length)];
+
+                // 2. Apanha todos os "filhos" (waypoints) desse caminho (ex: WP_C1, WP_C2, etc.)
+                int waypointCount = randomPathObject.childCount;
+                Transform[] waypointsForThisBot = new Transform[waypointCount];
+                for (int i = 0; i < waypointCount; i++)
+                {
+                    waypointsForThisBot[i] = randomPathObject.GetChild(i);
+                }
+
+                // 3. Atribui esses waypoints específicos (WP_C1, C2...) ao bot
+                ai.patrolPoints = waypointsForThisBot;
+            }
+            else
+            {
+                // Fallback (se esquecermos de ligar no inspector)
+                Debug.LogWarning($"[BotSpawner_Proto] 'allPatrolPaths' não está configurado! O Bot {bot.name} não vai patrulhar.");
+                ai.patrolPoints = new Transform[0]; // Dá-lhe uma lista vazia
+            }
+            // --- FIM DA NOVA LÓGICA ---
         }
 
         // 3. Ligar o script BotRespawnLink e Eventos
         var link = bot.GetComponent<BotRespawnLink>();
         if (!link) link = bot.AddComponent<BotRespawnLink>();
         link.spawner = this;
-        link.patrolWaypoints = patrolWaypoints; // Passa os waypoints para o link também, se necessário ao recriar
+
+        // --- LINHA ANTIGA REMOVIDA ---
+        // link.patrolWaypoints = patrolWaypoints; // Esta linha já não é necessária
 
         var death = bot.GetComponent<BOTDeath>();
         if (death != null)
@@ -85,9 +126,9 @@ public class BotSpawner_Proto : MonoBehaviour
         // Importante: Remover a subscrição para evitar chamadas múltiplas se algo der errado
         if (deadBotScript != null)
         {
-             deadBotScript.OnDied -= HandleBotDied;
+            deadBotScript.OnDied -= HandleBotDied;
         }
-       
+
         // Inicia a rotina para fazer respawn após o delay
         StartCoroutine(RespawnRoutine());
     }
@@ -102,6 +143,8 @@ public class BotSpawner_Proto : MonoBehaviour
             yield return new WaitForSeconds(respawnDelay);
 
         // Cria um novo bot
+        // NOTA: O SpawnOne() vai automaticamente sortear um NOVO caminho aleatório
+        // para o bot que acabou de nascer.
         SpawnOne();
     }
 

@@ -39757,8 +39757,14 @@ MonoBehaviour:
   spawnPoints:
   - {fileID: 1709926373}
   - {fileID: 432990707}
-  patrolWaypoints:
-  - {fileID: 1255401339}
+  - {fileID: 1951783856}
+  - {fileID: 650371602}
+  allPatrolPaths:
+  - {fileID: 1926202708}
+  - {fileID: 1733190215}
+  - {fileID: 815711970}
+  - {fileID: 1752338643}
+  - {fileID: 748902634}
   count: 1
   respawnDelay: 5
 --- !u!4 &1253390929

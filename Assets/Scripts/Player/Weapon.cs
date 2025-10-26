@@ -61,9 +61,9 @@ public class Weapon : MonoBehaviour
         }
 
         playerCC = GetComponentInParent<CharacterController>();
-
-        if (GetComponentInParent<BotCombat>() != null)
-            requireConfigForFire = false;
+         
+        // if (GetComponentInParent<BotCombat>() != null)
+           // requireConfigForFire = false;
 
         allConfigs = GetComponentsInChildren<WeaponConfig>(true);
         weaponSwitcher = GetComponent<WeaponSwitcher>();

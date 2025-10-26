@@ -9,7 +9,7 @@ public class WeaponSwitcher : MonoBehaviour
     [Header("Input Actions")]
     public InputActionReference weapon1; 
     public InputActionReference weapon2; 
-    public InputActionReference weapon3; 
+    public InputActionReference weapon3;
 
     int currentWeaponIndex = 0;
 
