@@ -138,7 +138,13 @@ public class BotWeaponAutoFit : MonoBehaviour
     {
         if (source == Source.UseExistingChildWeapon)
         {
-            var w = GetComponentInChildren<Weapon>(true);
+            Weapon w = null;
+            foreach (Transform t in transform)
+            {
+                w = t.GetComponentInChildren<Weapon>(true);
+                if (w != null) break;
+            }
+            return w ? w.gameObject : null;
             if (w) return w.gameObject;
         }
         else if (source == Source.InstantiatePrefab)
