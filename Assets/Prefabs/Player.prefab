@@ -614,12 +614,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathAndRespawn
   ShowTopMostFoldoutHeaderGroup: 1
+  netTransform: {fileID: 0}
+  characterController: {fileID: 0}
   health: {fileID: 3425268391848231974}
-  componentsToDisable:
-  - {fileID: 662064468204449256}
-  switchToIgnoreRaycastOnDeath: 1
-  ignoreRaycastLayer: 2
-  deathMenuCanvas: {fileID: 0}
+  spawnsManager: {fileID: 0}
+  selectionMode: 0
+  useSpawnRotation: 1
+  spawnUpOffset: 1.5
+  groundSnap: 1
+  groundRaycastUp: 2
+  groundRaycastDown: 10
 --- !u!114 &395597818018424008
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -641,12 +645,12 @@ MonoBehaviour:
   PositionLerpSmoothing: 1
   PositionMaxInterpolationTime: 0.1
   RotationLerpSmoothing: 1
-  RotationMaxInterpolationTime: 0.1
+  RotationMaxInterpolationTime: 0.2
   ScaleLerpSmoothing: 1
   ScaleMaxInterpolationTime: 0.1
   AuthorityMode: 1
   TickSyncChildren: 0
-  UseUnreliableDeltas: 0
+  UseUnreliableDeltas: 1
   SyncPositionX: 1
   SyncPositionY: 1
   SyncPositionZ: 1
@@ -656,10 +660,10 @@ MonoBehaviour:
   SyncScaleX: 1
   SyncScaleY: 1
   SyncScaleZ: 1
-  PositionThreshold: 0.001
-  RotAngleThreshold: 0.01
+  PositionThreshold: 0.02
+  RotAngleThreshold: 1
   ScaleThreshold: 0.01
-  UseQuaternionSynchronization: 0
+  UseQuaternionSynchronization: 1
   UseQuaternionCompression: 0
   UseHalfFloatPrecision: 0
   InLocalSpace: 0
