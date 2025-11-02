@@ -335,7 +335,7 @@ MonoBehaviour:
   btnJoin: {fileID: 132299390}
   btnLeave: {fileID: 1700043393}
   txtStatus: {fileID: 2109436718}
-  gameSceneName: GameScene
+  gameSceneName: Prototype
   roomCodeLength: 6
 --- !u!4 &55109586
 Transform:
