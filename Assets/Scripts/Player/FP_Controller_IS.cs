@@ -194,6 +194,7 @@ public class FP_Controller_IS : NetworkBehaviour
     void Update()
     {
         if (!IsOwner) return;
+        if (PauseMenuManager.IsPaused) return;
         // trava de segurança: se és o dono e o CC estiver desligado, volta a ligar
         if (cc && !cc.enabled) cc.enabled = true;
 

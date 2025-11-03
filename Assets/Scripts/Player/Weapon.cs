@@ -160,16 +160,18 @@ public class Weapon : NetworkBehaviour
         if (requireConfigForFire && activeConfig == null) return;
 
         // BLOQUEIO: não permitir input enquanto morto
-        bool isDead = ownerHealth && ownerHealth.isDead.Value;
-        if (isDead)
+        bool isDead   = ownerHealth && ownerHealth.isDead.Value;
+        bool isPaused = PauseMenuManager.IsPaused;
+
+        if (isDead || isPaused)
         {
-            if (shootAction && shootAction.action.enabled) shootAction.action.Disable();
+            if (shootAction && shootAction.action.enabled)  shootAction.action.Disable();
             if (reloadAction && reloadAction.action.enabled) reloadAction.action.Disable();
             return;
         }
         else
         {
-            if (shootAction != null && !shootAction.action.enabled) shootAction.action.Enable();
+            if (shootAction != null && !shootAction.action.enabled)  shootAction.action.Enable();
             if (reloadAction != null && !reloadAction.action.enabled) reloadAction.action.Enable();
         }
 

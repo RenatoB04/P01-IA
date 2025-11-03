@@ -34,6 +34,7 @@ public class WeaponSwitcher : MonoBehaviour
 
     void Update()
     {
+        if (PauseMenuManager.IsPaused) return;
         if (weapon1 != null && weapon1.action.triggered) SelectWeapon(0); 
         if (weapon2 != null && weapon2.action.triggered) SelectWeapon(1);
         if (weapon3 != null && weapon3.action.triggered) SelectWeapon(2); 
