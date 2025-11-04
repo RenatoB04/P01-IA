@@ -25,6 +25,9 @@ public class FP_Controller_IS : NetworkBehaviour
     [SerializeField] InputActionReference sprint;
     [SerializeField] InputActionReference crouch;
 
+    // ===================================================================
+    // ===== ESTE É O BLOCO DE CÓDIGO QUE EU ME ESQUECI DE COPIAR =====
+    // ===================================================================
     [Header("Velocidades")]
     public float walkSpeed = 6.5f;
     public float sprintSpeed = 10f;
@@ -56,6 +59,17 @@ public class FP_Controller_IS : NetworkBehaviour
     float cameraRootBaseY;
     float stepOffsetOriginal;
     bool isCrouching;
+    // ===================================================================
+    // ===== FIM DO BLOCO ESQUECIDO =====
+    // ===================================================================
+
+    [Header("Habilidades")]
+    [SerializeField] InputActionReference shieldAction; // (Q)
+    [SerializeField] InputActionReference pulseAction; // (E)
+
+    private PlayerShield playerShield; // (Este é o script que controla as habilidades)
+    private Health playerHealth;
+
 
     // --- NETWORK ---
     public override void OnNetworkSpawn()
@@ -116,6 +130,7 @@ public class FP_Controller_IS : NetworkBehaviour
         }
     }
 
+
     public override void OnLostOwnership()
     {
         ApplyOwnershipState(false);
@@ -138,10 +153,15 @@ public class FP_Controller_IS : NetworkBehaviour
         cc = GetComponent<CharacterController>();
         animator = GetComponentInChildren<Animator>();
         playerInput = GetComponent<PlayerInput>();
+        
+        // As nossas novas referências
+        playerShield = GetComponent<PlayerShield>(); 
+        playerHealth = GetComponent<Health>();
 
         if (!playerCamera) playerCamera = GetComponentInChildren<Camera>(true);
         if (!audioListener) audioListener = GetComponentInChildren<AudioListener>(true);
 
+        // Isto é o que estava a dar erro (porque as variáveis não existiam)
         originalHeight = cc.height;
         stepOffsetOriginal = cc.stepOffset;
 
@@ -171,6 +191,10 @@ public class FP_Controller_IS : NetworkBehaviour
         if (jump) jump.action.Enable();
         if (sprint) sprint.action.Enable();
         if (crouch) crouch.action.Enable();
+        
+        // Ativar as nossas ações
+        if (shieldAction) shieldAction.action.Enable();
+        if (pulseAction) pulseAction.action.Enable();
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -183,6 +207,10 @@ public class FP_Controller_IS : NetworkBehaviour
         if (jump) jump.action.Disable();
         if (sprint) sprint.action.Disable();
         if (crouch) crouch.action.Disable();
+        
+        // Desativar as nossas ações
+        if (shieldAction) shieldAction.action.Disable();
+        if (pulseAction) pulseAction.action.Disable();
 
         if (IsOwner)
         {
@@ -191,28 +219,48 @@ public class FP_Controller_IS : NetworkBehaviour
         }
     }
 
+    // --- Update (Modificado com os inputs das habilidades) ---
     void Update()
     {
         if (!IsOwner) return;
         if (PauseMenuManager.IsPaused) return;
-        // trava de segurança: se és o dono e o CC estiver desligado, volta a ligar
         if (cc && !cc.enabled) cc.enabled = true;
+
+        bool shieldActive = (playerShield != null && playerShield.IsShieldActive.Value);
 
         // LOOK
         Vector2 lookDelta = look ? look.action.ReadValue<Vector2>() : Vector2.zero;
         xRot = Mathf.Clamp(xRot - lookDelta.y * sens, -85f, 85f);
         if (cameraRoot) cameraRoot.localRotation = Quaternion.Euler(xRot, 0f, 0f);
         transform.Rotate(Vector3.up * (lookDelta.x * sens));
+        
+        // Input do Escudo (Q)
+        if (shieldAction != null && shieldAction.action.WasPressedThisFrame())
+        {
+            if (playerHealth == null || !playerHealth.isDead.Value)
+            {
+                playerShield?.RequestShieldServerRpc();
+            }
+        }
+        
+        // Input do Pulso (E)
+        if (pulseAction != null && pulseAction.action.WasPressedThisFrame())
+        {
+            // Não deixa ativar se estiver morto
+            if (playerHealth == null || !playerHealth.isDead.Value)
+            {
+                // Envia o pedido ao servidor
+                playerShield?.RequestPulseServerRpc();
+            }
+        }
 
-        // CROUCH toggle
+        // CROUCH
         if (crouch && crouch.action.WasPressedThisFrame()) isCrouching = !isCrouching;
-
         float targetHeight = isCrouching ? crouchHeight : originalHeight;
         float targetCenterY = targetHeight * 0.5f;
         cc.height = Mathf.Lerp(cc.height, targetHeight, Time.deltaTime * crouchSmooth);
         cc.center = Vector3.Lerp(cc.center, new Vector3(0f, targetCenterY, 0f), Time.deltaTime * crouchSmooth);
         cc.stepOffset = isCrouching ? 0.1f : stepOffsetOriginal;
-
         if (cameraRoot)
         {
             float targetCamY = cameraRootBaseY + (isCrouching ? crouchCamYOffset : 0f);
@@ -228,15 +276,12 @@ public class FP_Controller_IS : NetworkBehaviour
 
         bool sprinting = (sprint && sprint.action.IsPressed()) && !isCrouching;
         float targetSpeed = isCrouching ? crouchSpeed : (sprinting ? sprintSpeed : walkSpeed);
-
         Vector3 targetHorizVel = inputDir * targetSpeed;
         float accel = cc.isGrounded ? accelGround : accelAir;
-
         Vector3 horiz = new Vector3(velocity.x, 0f, velocity.z);
         horiz = Vector3.MoveTowards(horiz, targetHorizVel, accel * Time.deltaTime);
         velocity.x = horiz.x;
         velocity.z = horiz.z;
-
         float speedPercent = new Vector3(velocity.x, 0f, velocity.z).magnitude / sprintSpeed;
         if (speedPercent < 0.05f) speedPercent = 0f;
         speedPercent = Mathf.Clamp01(speedPercent);
@@ -245,8 +290,9 @@ public class FP_Controller_IS : NetworkBehaviour
             animator.SetFloat("Speed", speedPercent, 0.1f, Time.deltaTime);
             animator.SetBool("isCrouching", isCrouching);
         }
-
-        if (canJump && jump != null && jump.action.WasPressedThisFrame() && !isCrouching)
+        
+        // SALTO
+        if (canJump && jump != null && jump.action.WasPressedThisFrame() && !isCrouching) 
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
             canJump = false;
@@ -254,10 +300,8 @@ public class FP_Controller_IS : NetworkBehaviour
 
         velocity.y += gravity * Time.deltaTime;
         if (velocity.y < maxFallSpeed) velocity.y = maxFallSpeed;
-
         Vector3 motion = velocity * Time.deltaTime;
         CollisionFlags flags = cc.Move(motion);
-
         bool groundedNow = (flags & CollisionFlags.Below) != 0;
         if (groundedNow)
         {

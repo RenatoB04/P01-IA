@@ -39,6 +39,9 @@ public class Weapon : NetworkBehaviour
     CharacterController playerCC;
     private bool isBot = false;
     private Health ownerHealth; // Para guardar a referência ao nosso Health
+    
+    // --- NOVO: Referência ao Escudo ---
+    private PlayerShield playerShield;
 
     // --- Estado de Tiro ---
     float nextTimeUnscaled;
@@ -58,9 +61,13 @@ public class Weapon : NetworkBehaviour
         
         // Procura o Health no "root" (no objeto Player principal)
         ownerHealth = GetComponentInParent<Health>(); 
+        
+        // --- NOVO: Obtém o script do Escudo ---
+        playerShield = GetComponentInParent<PlayerShield>();
+        
         if (ownerHealth == null && requireConfigForFire)
         {
-             Debug.LogError($"Weapon.cs (Awake): Não foi possível encontrar o script 'Health' no pai. A bala não terá equipa.");
+            Debug.LogError($"Weapon.cs (Awake): Não foi possível encontrar o script 'Health' no pai. A bala não terá equipa.");
         }
         
         if (GetComponentInParent<BotCombat>() != null)
@@ -159,11 +166,12 @@ public class Weapon : NetworkBehaviour
         RefreshActiveConfig(applyImmediately: true);
         if (requireConfigForFire && activeConfig == null) return;
 
-        // BLOQUEIO: não permitir input enquanto morto
-        bool isDead   = ownerHealth && ownerHealth.isDead.Value;
-        bool isPaused = PauseMenuManager.IsPaused;
+        // --- MODIFICADO: Adiciona a verificação do Escudo ---
+        bool isDead     = ownerHealth && ownerHealth.isDead.Value;
+        bool isPaused   = PauseMenuManager.IsPaused;
+        bool isShielded = playerShield && playerShield.IsShieldActive.Value; // <-- NOVO
 
-        if (isDead || isPaused)
+        if (isDead || isPaused || isShielded) // <-- MODIFICADO
         {
             if (shootAction && shootAction.action.enabled)  shootAction.action.Disable();
             if (reloadAction && reloadAction.action.enabled) reloadAction.action.Disable();
@@ -174,6 +182,7 @@ public class Weapon : NetworkBehaviour
             if (shootAction != null && !shootAction.action.enabled)  shootAction.action.Enable();
             if (reloadAction != null && !reloadAction.action.enabled) reloadAction.action.Enable();
         }
+        // --- Fim da Modificação ---
 
         if (requireConfigForFire && reloadAction && reloadAction.action.WasPressedThisFrame()) TryReload();
         if (requireConfigForFire && currentAmmo <= 0 && reserveAmmo > 0 && !isReloading) TryReload();
@@ -212,6 +221,9 @@ public class Weapon : NetworkBehaviour
 
         // BLOQUEIO: não atirar enquanto morto
         if (ownerHealth && ownerHealth.isDead.Value) return;
+        
+        // --- NOVO: Bloqueio do Escudo para Bots ---
+        if (playerShield && playerShield.IsShieldActive.Value) return;
 
         float useFireRate = activeConfig ? activeConfig.fireRate : this.fireRate;
         if (Time.unscaledTime >= nextTimeUnscaled)
@@ -345,7 +357,7 @@ public class Weapon : NetworkBehaviour
             catch (Exception ex)
             {
                 Debug.LogError($"Weapon.SpawnBulletServerRpc: Falha ao Spawn do NetworkObject do prefab '{prefab.name}'. " +
-                               $"Confere se está registado no NetworkManager > Network Prefabs. Ex: {ex.Message}");
+                                $"Confere se está registado no NetworkManager > Network Prefabs. Ex: {ex.Message}");
                 Destroy(bullet);
             }
         }
@@ -442,7 +454,7 @@ public class Weapon : NetworkBehaviour
         if (weaponSwitcher != null)
         {
             var mi = weaponSwitcher.GetType().GetMethod("GetActiveWeapon",
-                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             if (mi != null)
             {
                 var go = mi.Invoke(weaponSwitcher, null) as GameObject;

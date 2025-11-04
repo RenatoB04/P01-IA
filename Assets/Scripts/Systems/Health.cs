@@ -25,12 +25,18 @@ public class Health : NetworkBehaviour
     [Header("UI (Opcional)")]
     [HideInInspector] public TextMeshProUGUI healthText;
 
+    // ----- MODIFICAÇÃO 1 (Referência ao Escudo) -----
+    private PlayerShield playerShield;
+
     // Scoring
     private ulong lastInstigatorClientId = ulong.MaxValue;
     private Coroutine uiFinderCo;
 
     void Awake()
     {
+        // ----- MODIFICAÇÃO 2 (Obter o Escudo) -----
+        playerShield = GetComponent<PlayerShield>();
+        
         UpdateHealthUI(maxHealth);
     }
 
@@ -128,6 +134,29 @@ public class Health : NetworkBehaviour
 
         amount = Mathf.Clamp(amount, 0f, maxHealth * 2f);
         if (amount <= 0f) return;
+
+        // ==========================================================
+        // ===== MODIFICAÇÃO 3 (Bloco de Lógica do Escudo)      =====
+        // ==========================================================
+        
+        // Verifica se temos um escudo e se ele está ATIVO
+        if (playerShield != null && playerShield.IsShieldActive.Value)
+        {
+            // Pede ao escudo para absorver o dano.
+            // O 'amount' será atualizado para o dano que "passou".
+            amount = playerShield.AbsorbDamageServer(amount);
+
+            // Se o escudo absorveu TUDO (ou quase tudo),
+            // não há mais nada a fazer nesta função.
+            if (amount <= 0.01f)
+            {
+                return; 
+            }
+        }
+        // ==========================================================
+        // ===== FIM DO BLOCO DE CÓDIGO                         =====
+        // ==========================================================
+
 
         // Friendly fire
         if (team.Value != -1 && instigatorTeam != -1 && team.Value == instigatorTeam)

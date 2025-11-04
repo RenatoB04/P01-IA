@@ -398,6 +398,7 @@ GameObject:
   - component: {fileID: 2742859909207369118}
   - component: {fileID: 395597818018424008}
   - component: {fileID: -5387876462040107482}
+  - component: {fileID: 1845656946548500338}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -558,6 +559,8 @@ MonoBehaviour:
   crouchHeight: 1
   crouchCamYOffset: -0.4
   crouchSmooth: 12
+  shieldAction: {fileID: 1590660611649017123, guid: 289c1b55c9541489481df5cc06664110, type: 3}
+  pulseAction: {fileID: 8856045699606605349, guid: 289c1b55c9541489481df5cc06664110, type: 3}
 --- !u!114 &3425268391848231974
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -694,6 +697,37 @@ MonoBehaviour:
   OnKillsChanged:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &1845656946548500338
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9115588152224453141}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca701e18812e06c46a652929dc60eb32, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerShield
+  ShowTopMostFoldoutHeaderGroup: 1
+  shieldMode: 0
+  shieldCapacity: 100
+  shieldDuration: 2
+  shieldCooldown: 30
+  pulseDamage: 40
+  pulseRadius: 4
+  pulseCastTime: 1.5
+  pulseCooldown: 45
+  IsShieldActive:
+    m_InternalValue: 0
+  NextShieldReadyTime:
+    m_InternalValue: 0
+  ShieldHealth:
+    m_InternalValue: 0
+  NextPulseReadyTime:
+    m_InternalValue: 0
+  IsPulseCasting:
+    m_InternalValue: 0
 --- !u!1001 &1170574359946458000
 PrefabInstance:
   m_ObjectHideFlags: 0
