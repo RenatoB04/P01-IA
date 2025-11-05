@@ -1899,14 +1899,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf84881b68c52aa4ca01f3914d63f174, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathAndRespawn
+  ShowTopMostFoldoutHeaderGroup: 1
+  netTransform: {fileID: 0}
+  characterController: {fileID: 0}
   health: {fileID: 107781423}
-  spawnPoint: {fileID: 0}
-  deathMenu: {fileID: 0}
-  respawnButton: {fileID: 0}
-  componentsToDisable:
-  - {fileID: 107781424}
-  switchToIgnoreRaycastOnDeath: 1
-  ignoreRaycastLayer: 2
+  spawnsManager: {fileID: 0}
+  selectionMode: 0
+  useSpawnRotation: 1
+  spawnUpOffset: 1.5
+  groundSnap: 1
+  groundRaycastUp: 2
+  groundRaycastDown: 10
 --- !u!114 &107781422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1935,10 +1938,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5c70b6345fe23f74cbe87231bb4b1b4e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Health
+  ShowTopMostFoldoutHeaderGroup: 1
   maxHealth: 100
-  team: 1
-  currentHealth: 0
-  isDead: 0
+  currentHealth:
+    m_InternalValue: 100
+  isDead:
+    m_InternalValue: 0
+  team:
+    m_InternalValue: -1
   OnHealthChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -1979,6 +1986,8 @@ MonoBehaviour:
   crouchHeight: 1
   crouchCamYOffset: -0.4
   crouchSmooth: 12
+  shieldAction: {fileID: 0}
+  pulseAction: {fileID: 0}
 --- !u!114 &107781425
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -17186,7 +17195,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!81 &1132719121
 AudioListener:
   m_ObjectHideFlags: 0

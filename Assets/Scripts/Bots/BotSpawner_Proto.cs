@@ -19,6 +19,17 @@ public class BotSpawner_Proto : MonoBehaviour
 
     void Start()
     {
+
+        void Awake()
+        {
+            // Desativa o spawner se não estivermos em modo offline
+            if (PlayerPrefs.GetInt("OfflineMode", 0) != 1)
+            {
+                enabled = false;
+                return;
+            }
+        }
+
         if (botPrefab == null || spawnPoints == null || spawnPoints.Length == 0)
         {
             Debug.LogError("Configura botPrefab e spawnPoints.");

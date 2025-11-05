@@ -27,14 +27,15 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [SerializeField] Button btnJoin;
     [SerializeField] Button btnLeave;
     [SerializeField] TMP_Text txtStatus;
-    [SerializeField] Button btnStartGame;            // 👉 novo
-    [SerializeField] TMP_Text txtCountdown;          // 👉 opcional (para mostrar contagem)
+    [SerializeField] Button btnStartGame;            // 👉 botão start original
+    [SerializeField] TMP_Text txtCountdown;          // 👉 contador original
+    [SerializeField] Button btnPlayBots;             // 👉 NOVO botão "Jogar com Bots"
 
     [Header("Config")]
     [SerializeField] string gameSceneName = "GameScene";
     [SerializeField] int roomCodeLength = 6;
     [SerializeField] int maxPlayers = 2;
-    [SerializeField] int countdownSeconds = 3;       // 👉 tempo do contador
+    [SerializeField] int countdownSeconds = 3;
 
     const string ROOM_PROP_RELAY = "relay"; // joinCode do Unity Relay
 
@@ -58,6 +59,9 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         btnJoin.onClick.AddListener(OnClickJoin);
         btnLeave.onClick.AddListener(OnClickLeave);
         if (btnStartGame) btnStartGame.onClick.AddListener(OnClickStartGame);
+
+        // 👉 regista o novo botão
+        if (btnPlayBots) btnPlayBots.onClick.AddListener(OnClickPlayWithBots);
     }
 
     void OnDestroy()
@@ -67,6 +71,9 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         btnJoin.onClick.RemoveAllListeners();
         btnLeave.onClick.RemoveAllListeners();
         if (btnStartGame) btnStartGame.onClick.RemoveAllListeners();
+
+        // 👉 remove o listener do novo botão
+        if (btnPlayBots) btnPlayBots.onClick.RemoveAllListeners();
     }
 
     void SetUIConnected(bool connected)
@@ -92,16 +99,24 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         if (txtCreatedCode) txtCreatedCode.gameObject.SetActive(inRoom);
     }
 
-    void Log(string msg) { if (txtStatus) txtStatus.text = msg; Debug.Log("[Lobby] " + msg); }
+    void Log(string msg)
+    {
+        if (txtStatus) txtStatus.text = msg;
+        Debug.Log("[Lobby] " + msg);
+    }
 
     async void OnClickConnect()
     {
-        var nick = string.IsNullOrWhiteSpace(ifPlayerName?.text) ? ("Player" + UnityEngine.Random.Range(1000, 9999)) : ifPlayerName.text.Trim();
+        var nick = string.IsNullOrWhiteSpace(ifPlayerName?.text)
+            ? ("Player" + UnityEngine.Random.Range(1000, 9999))
+            : ifPlayerName.text.Trim();
         PhotonNetwork.NickName = nick;
         Log($"A ligar ao Photon como {PhotonNetwork.NickName}...");
 
-        if (!PhotonNetwork.IsConnected) PhotonNetwork.ConnectUsingSettings();
-        else { Log("Já estás ligado."); SetUIConnected(true); }
+        if (!PhotonNetwork.IsConnected)
+            PhotonNetwork.ConnectUsingSettings();
+        else
+            Log("Já estás ligado.");
 
         await EnsureUnityServicesAsync();
     }
@@ -131,10 +146,14 @@ public class LobbyManager : MonoBehaviourPunCallbacks
 
     void OnClickLeave()
     {
-        if (PhotonNetwork.InRoom) { Log("A sair do lobby..."); PhotonNetwork.LeaveRoom(); }
+        if (PhotonNetwork.InRoom)
+        {
+            Log("A sair do lobby...");
+            PhotonNetwork.LeaveRoom();
+        }
     }
 
-    // 👉 NOVO — clique no botão "Começar Jogo" (apenas host pode clicar)
+    // 👉 clique do host no botão “Começar Jogo”
     void OnClickStartGame()
     {
         if (!PhotonNetwork.IsMasterClient) return;
@@ -143,8 +162,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         PhotonNetwork.CurrentRoom.SetCustomProperties(new Hashtable { { "startCountdown", true } });
     }
 
-    // ---------------- Photon Callbacks ----------------
-
+    // -------------------- Photon Callbacks --------------------
     public override void OnConnectedToMaster()
     {
         Log("Ligado ao Master. A entrar no lobby...");
@@ -184,19 +202,6 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         // Ativa botão só para o host
         if (PhotonNetwork.IsMasterClient && btnStartGame)
             btnStartGame.gameObject.SetActive(true);
-
-        // Late join: se o relay já existir, conecta-se
-        if (PhotonNetwork.CurrentRoom.CustomProperties != null &&
-            PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(ROOM_PROP_RELAY, out var relayObj))
-        {
-            var joinCode = relayObj as string;
-            if (!string.IsNullOrEmpty(joinCode) && !IsNgoConnected())
-            {
-                Log($"(Late Join) Código Relay já presente: {joinCode}. A ligar ao jogo...");
-                await StartClientWithRelayAsync(joinCode);
-                return;
-            }
-        }
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
@@ -211,14 +216,12 @@ public class LobbyManager : MonoBehaviourPunCallbacks
 
     public override async void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
     {
-        // 👉 countdown trigger
         if (propertiesThatChanged.ContainsKey("startCountdown"))
         {
             await StartCountdownAndLaunch();
             return;
         }
 
-        // Clientes recebem o joinCode e ligam-se ao NGO
         if (propertiesThatChanged.ContainsKey(ROOM_PROP_RELAY))
         {
             string joinCode = propertiesThatChanged[ROOM_PROP_RELAY] as string;
@@ -230,7 +233,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         }
     }
 
-    // 👉 Countdown sincronizado
+    // ---------------- Countdown ----------------
     async Task StartCountdownAndLaunch()
     {
         if (_isCountingDown) return;
@@ -254,7 +257,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         }
     }
 
-    // ---------------- Fluxo Híbrido (igual) ----------------
+    // ---------------- Fluxo híbrido ----------------
     async Task StartHostWithRelayAndLoadAsync()
     {
         await EnsureUnityServicesAsync();
@@ -314,5 +317,35 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         var sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) sb.Append(chars[rnd.Next(chars.Length)]);
         return sb.ToString();
+    }
+
+    // -------------------- NOVO: modo offline com bots --------------------
+    public void OnClickPlayWithBots()
+    {
+        Debug.Log("[Lobby] Modo offline com bots (host local).");
+
+        if (PhotonNetwork.IsConnected)
+            PhotonNetwork.Disconnect();
+
+        if (NetworkManager.Singleton == null)
+        {
+            Debug.LogError("[Lobby] NetworkManager.Singleton == null. Não consigo iniciar host local.");
+            return;
+        }
+
+        if (!NetworkManager.Singleton.IsServer && !NetworkManager.Singleton.IsClient)
+        {
+            bool ok = NetworkManager.Singleton.StartHost();
+            if (!ok)
+            {
+                Debug.LogError("[Lobby] Falha ao iniciar Host local.");
+                return;
+            }
+        }
+
+        // marca que vamos arrancar em modo offline
+        PlayerPrefs.SetInt("OfflineMode", 1);
+
+        NetworkManager.Singleton.SceneManager.LoadScene("Prototype", LoadSceneMode.Single);
     }
 }
