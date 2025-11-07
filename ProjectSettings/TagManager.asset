@@ -7,6 +7,13 @@ TagManager:
   - HealthText
   - AmmoText
   - DeathMenu
+  - GasTank
+  - Target
+  - Concrete
+  - Metal
+  - Bullet
+  - ExplosiveBarrel
+  - ShieldText
   layers:
   - Default
   - TransparentFX
