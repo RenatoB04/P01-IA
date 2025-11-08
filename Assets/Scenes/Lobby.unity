@@ -482,6 +482,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3697796395212678322, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 5109010990740144413, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
       propertyPath: m_text
       value: Criar Lobby
@@ -795,6 +799,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 740783368}
     m_Modifications:
+    - target: {fileID: 2166858971666811072, guid: e9d4e8261baeca346bc30210742779c1, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 4082054462816243311, guid: e9d4e8261baeca346bc30210742779c1, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -1447,6 +1455,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3697796395212678322, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 5109010990740144413, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
       propertyPath: m_text
       value: 'Entrar
@@ -1490,9 +1502,13 @@ PrefabInstance:
       propertyPath: m_Text
       value: "Inserir c\xF3digo"
       objectReference: {fileID: 0}
+    - target: {fileID: 2166858971666811072, guid: e9d4e8261baeca346bc30210742779c1, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 2829783095096672414, guid: e9d4e8261baeca346bc30210742779c1, type: 3}
       propertyPath: m_text
-      value: "Inserir nome\u200B"
+      value: "Inserir c\xF3digo\u200B"
       objectReference: {fileID: 0}
     - target: {fileID: 4082054462816243311, guid: e9d4e8261baeca346bc30210742779c1, type: 3}
       propertyPath: m_Pivot.x
@@ -1963,6 +1979,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3697796395212678322, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 5230826317255391481, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
       propertyPath: m_Name
       value: btnConnect
@@ -2077,6 +2097,22 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2071714462408403857, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: m_Resource
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 2071714462408403857, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: m_PlayOnAwake
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2071714462408403857, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: OutputAudioMixerGroup
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 3697796395212678322, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 5109010990740144413, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
       propertyPath: m_text
       value: Jogar Offline
@@ -2486,8 +2522,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0.000019073, y: 0.000030518}
-  m_SizeDelta: {x: 2021.3105, y: 1209.258}
+  m_AnchoredPosition: {x: 48, y: -0.000022888}
+  m_SizeDelta: {x: 2297.2178, y: 1374.3208}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1071916649
 MonoBehaviour:
@@ -2509,7 +2545,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 21300000, guid: d173fb271c10fd24e9f097f36454d859, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -2627,6 +2663,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3697796395212678322, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 5109010990740144413, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
       propertyPath: m_text
       value: INICIAR
@@ -3682,6 +3722,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3697796395212678322, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: hoverSound
+      value: 
+      objectReference: {fileID: 8300000, guid: 9b411210369caf44ca575effe0a590dc, type: 3}
     - target: {fileID: 5109010990740144413, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
       propertyPath: m_text
       value: Sair
