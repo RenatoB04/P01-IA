@@ -1,45 +1,45 @@
 using UnityEngine;
 
+/// <summary>
+/// Ligação entre um bot individual e o spawner.
+/// Neste momento o respawn principal é feito via BOTDeath.OnAnyBotKilled
+/// (ver BotSpawner_Proto), por isso isto serve sobretudo para manter
+/// compatibilidade e, no futuro, poderes forçar respawn com path específico.
+/// </summary>
 [DisallowMultipleComponent]
 public class BotRespawnLink : MonoBehaviour
 {
-    [HideInInspector] public BotSpawner_Proto spawner;     // definido pelo spawner ao instanciar
-    [HideInInspector] public Transform[] patrolWaypoints;  // para reatribuir aos bots novos (opcional)
+    [Header("Ligação ao Spawner (opcional)")]
+    public BotSpawner_Proto spawner;
+
+    [Tooltip("Waypoints preferidos para este bot em respawns futuros (opcional).")]
+    public Transform[] patrolWaypoints;
 
     BOTDeath death;
 
     void Awake()
     {
-        // tenta obter o BOTDeath no mesmo GameObject
         death = GetComponent<BOTDeath>();
-        if (!death)
+        if (death != null)
         {
-            Debug.LogWarning("[BotRespawnLink] BOTDeath não encontrado no bot.");
-            return;
+            death.OnDied -= OnBotDied;
+            death.OnDied += OnBotDied;
         }
-
-        // subscreve ao evento de morte (evita duplicar subscrição)
-        death.OnDied -= HandleDeath;
-        death.OnDied += HandleDeath;
     }
 
     void OnDestroy()
     {
-        // remove subscrição para evitar leaks ou callbacks inválidos
         if (death != null)
-            death.OnDied -= HandleDeath;
+            death.OnDied -= OnBotDied;
     }
 
-    void HandleDeath(BOTDeath d)
+    void OnBotDied(BOTDeath d)
     {
-        // notifica o spawner para criar um novo bot após delay
-        if (spawner != null)
+        // O respawn real é tratado pelo BotSpawner_Proto através de BOTDeath.OnAnyBotKilled.
+        // Aqui apenas chamamos ScheduleRespawn caso no futuro queiras usar paths específicos.
+        if (spawner != null && patrolWaypoints != null && patrolWaypoints.Length > 0)
         {
             spawner.ScheduleRespawn(patrolWaypoints);
-        }
-        else
-        {
-            Debug.LogWarning("[BotRespawnLink] Spawner não definido; não consigo fazer respawn.");
         }
     }
 }

@@ -25,7 +25,6 @@ public class Health : NetworkBehaviour
     [Header("UI (Opcional)")]
     [HideInInspector] public TextMeshProUGUI healthText;
 
-    // ----- MODIFICAÇÃO 1 (Referência ao Escudo) -----
     private PlayerShield playerShield;
 
     // Scoring
@@ -34,20 +33,32 @@ public class Health : NetworkBehaviour
 
     void Awake()
     {
-        // ----- MODIFICAÇÃO 2 (Obter o Escudo) -----
         playerShield = GetComponent<PlayerShield>();
-        
         UpdateHealthUI(maxHealth);
     }
 
+    // ---------- FUNÇÃO MODIFICADA ----------
     public override void OnNetworkSpawn()
     {
         if (IsServer)
         {
             currentHealth.Value = maxHealth;
             isDead.Value = false;
-            if (team.Value == -1)
-                team.Value = (int)OwnerClientId;
+
+            // --- LÓGICA DE EQUIPA CORRIGIDA ---
+            if (team.Value == -1) // Se a equipa ainda não foi definida
+            {
+                // Verifica se este GameObject tem a IA do Bot.
+                if (GetComponent<BotAI_Proto>() != null)
+                {
+                    team.Value = -2; // -2 é a equipa dos Bots
+                }
+                else
+                {
+                    team.Value = (int)OwnerClientId; // Jogadores normais (equipa 0)
+                }
+            }
+            // --- FIM DA CORREÇÃO ---
         }
 
         currentHealth.OnValueChanged += OnHealthValueChanged;
@@ -59,6 +70,7 @@ public class Health : NetworkBehaviour
         if (IsOwner)
             uiFinderCo = StartCoroutine(FindUIRefresh());
     }
+    // ---------- FIM DA MODIFICAÇÃO ----------
 
     private IEnumerator FindUIRefresh()
     {
@@ -116,6 +128,12 @@ public class Health : NetworkBehaviour
 
     // -------- API pública (compatível) --------
 
+    // Esta função apanha chamadas de scripts antigos (não-netcode)
+    public void TakeDamage(float amount)
+    {
+        TakeDamageServerRpc(amount, -1, ulong.MaxValue, Vector3.zero, false);
+    }
+
     // Cliente pode chamar (ex.: explosão local) → vai ao servidor via RPC
     public void TakeDamage(float amount, int instigatorTeam = -1, ulong instigatorClientId = ulong.MaxValue)
         => TakeDamageServerRpc(amount, instigatorTeam, instigatorClientId, Vector3.zero, false);
@@ -135,28 +153,15 @@ public class Health : NetworkBehaviour
         amount = Mathf.Clamp(amount, 0f, maxHealth * 2f);
         if (amount <= 0f) return;
 
-        // ==========================================================
-        // ===== MODIFICAÇÃO 3 (Bloco de Lógica do Escudo)      =====
-        // ==========================================================
-        
         // Verifica se temos um escudo e se ele está ATIVO
         if (playerShield != null && playerShield.IsShieldActive.Value)
         {
-            // Pede ao escudo para absorver o dano.
-            // O 'amount' será atualizado para o dano que "passou".
             amount = playerShield.AbsorbDamageServer(amount);
-
-            // Se o escudo absorveu TUDO (ou quase tudo),
-            // não há mais nada a fazer nesta função.
             if (amount <= 0.01f)
             {
-                return; 
+                return;
             }
         }
-        // ==========================================================
-        // ===== FIM DO BLOCO DE CÓDIGO                         =====
-        // ==========================================================
-
 
         // Friendly fire
         if (team.Value != -1 && instigatorTeam != -1 && team.Value == instigatorTeam)
@@ -206,8 +211,8 @@ public class Health : NetworkBehaviour
     private void DamageIndicatorClientRpc(Vector3 sourceWorldPos, ClientRpcParams rpcParams = default)
     {
         if (!IsOwner) return;
-        if (DamageIndicatorUI.Instance)
-            DamageIndicatorUI.Instance.RegisterHit(sourceWorldPos, 0f);
+        // if (DamageIndicatorUI.Instance) // Descomenta se tiveres este UI
+        //     DamageIndicatorUI.Instance.RegisterHit(sourceWorldPos, 0f);
     }
 
     private void TryAwardKillToLastInstigator()
@@ -220,8 +225,8 @@ public class Health : NetworkBehaviour
             NetworkManager.Singleton.ConnectedClients.TryGetValue(lastInstigatorClientId, out var client) &&
             client != null && client.PlayerObject != null)
         {
-            var ps = client.PlayerObject.GetComponent<PlayerScore>();
-            if (ps != null) ps.AwardKillAndPoints();
+            // var ps = client.PlayerObject.GetComponent<PlayerScore>(); // Descomenta se tiveres este script
+            // if (ps != null) ps.AwardKillAndPoints();
         }
 
         lastInstigatorClientId = ulong.MaxValue;

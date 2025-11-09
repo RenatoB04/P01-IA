@@ -1,497 +1,559 @@
 using UnityEngine;
 using UnityEngine.AI;
-using System;
 using System.Collections.Generic;
-using Unity.Netcode; // Importante para o IsServer (embora a IA deva correr só no servidor)
 
-// O BotAI deve ser um NetworkBehaviour para poder ler NetworkVariables
-// e garantir que a lógica só corre no servidor.
-public class BotAI_Proto : NetworkBehaviour
+/// <summary>
+/// IA offline dos bots: patrulha por waypoints, vê o player, persegue, ataca,
+/// foge com pouca vida, pode ir a pickups de vida/ammo e comunica com outros bots.
+/// NÃO usa Netcode (MonoBehaviour normal).
+/// </summary>
+[RequireComponent(typeof(NavMeshAgent))]
+public class BotAI_Proto : MonoBehaviour
 {
-    // === ESTADOS DA IA ===
-    enum BotState { Patrol, Chase, Search, Attack, Retreat }
+    public enum BotState
+    {
+        Patrol,
+        Chase,
+        Attack,
+        Search,
+        Retreat,   // fuga / ir buscar vida
+        GoToAmmo   // ir buscar munições
+    }
 
     [Header("Debug")]
-    [SerializeField]
-    private BotState currentState = BotState.Patrol;
+    [SerializeField] BotState currentState = BotState.Patrol;
+    public bool debugLogs = false;
+
+    [Header("Refs")]
+    public Transform eyes;                  // ponto de visão; se null usa transform
+    public Animator animator;               // opcional, só para "Speed"
+    public MonoBehaviour healthSource;      // script de vida (para ler vida normalizada)
+    public string healthCurrentField = "currentHealth";
+    public string healthMaxField = "maxHealth";
+    public BotCombat combat;                // script de combate/arma
 
     [Header("Patrulha")]
-    public Transform[] patrolPoints; // PREENCHIDO PELO SPAWNER
-    public float waypointTolerance = 1.5f;
+    public Transform[] patrolPoints;        // todos os WPs possíveis (inclui caminhos normais)
+    public float waypointTolerance = 1.0f;
+    public float patrolRepathInterval = 0.25f;
 
-    [Header("Visão")]
-    public float viewRadius = 15f;
-    [Range(0, 180)] public float viewAngle = 110f;
-    public LayerMask targetMask;     // O que o bot considera um alvo (ex: Layer "Player")
-    public LayerMask obstacleMask;   // O que bloqueia a visão (ex: Layer "Default", "Wall")
-    [Tooltip("Tempo (s) que o bot continua a perseguir após perder visão (antes de ir para 'Search').")]
-    public float loseSightChaseTime = 5f;
-    [Tooltip("Tempo (s) que o bot espera no último local conhecido, procurando.")]
-    public float searchWaitTime = 5.0f;
+    [Header("Pickups (Waypoints especiais)")]
+    public Transform[] healthPickups;       // WPs onde há vida
+    public Transform[] ammoPickups;         // WPs onde há munições
 
-    [Header("Combate e Fuga")]
-    [Tooltip("Distância para parar de perseguir e começar a atacar.")]
-    public float attackDistance = 8f;
-    [Tooltip("Distância para parar de atacar e volta a perseguir.")]
-    public float chaseDistance = 10f;
-    [Tooltip("Percentagem de vida (0.0 a 1.0) para começar a fugir.")]
-    [Range(0f, 1f)] public float healthThreshold = 0.3f;
-    [Tooltip("Multiplicador de velocidade ao fugir.")]
+    [Header("Visão / Target")]
+    public string playerTag = "Player";
+    public LayerMask obstacleMask = ~0;     // paredes/chão etc (NÃO incluir o player)
+    public float viewRadius = 80f;          // grande, para quase "mapa todo"
+    public float maxSearchTime = 10f;       // tempo a procurar depois de perder visão
+
+    [Header("Combate / Distâncias")]
+    public float idealCombatDistance = 10f; // distância onde ele tenta ficar
+    public float tooCloseDistance = 4f;     // se mais perto que isto, afasta-se
+    public float giveUpDistance = 120f;     // se o player está mais longe que isto, ignora
+
+    [Header("Prioridades")]
+    [Range(0f, 1f)] public float lowHealthThreshold = 0.2f; // <20%
+    [Range(0f, 1f)] public float lowAmmoThreshold = 0.2f;   // <20% (lido do BotCombat)
+
+    [Header("Fuga")]
     public float retreatSpeedMultiplier = 1.5f;
-    [Tooltip("Tempo (s) que o bot espera no ponto de fuga antes de reavaliar.")]
-    public float retreatReassessTime = 2.0f;
 
-    [Header("Animação")]
-    public Animator animator;
-    [Tooltip("Ajuste para sincronizar velocidade da animação com a do NavMeshAgent.")]
-    public float animationSpeedMultiplier = 1.0f;
+    [Header("Comunicação entre bots")]
+    public static List<BotAI_Proto> allBots = new List<BotAI_Proto>();
+    public float alertRadius = 25f;         // raio onde avisa outros bots
 
-    // --- Componentes e Estado Interno ---
-    private NavMeshAgent agent;
-    private Health health;
-    private Transform target;
-    private int patrolIndex = -1;
-    private float loseTargetTimer;
-    private float searchTimer;
-    private float retreatTimer;
-    private Vector3 lastKnownTargetPosition;
-    private float originalSpeed;
-    private bool lostSightMessageShown = false;
+    // --- Interno ---
+    NavMeshAgent agent;
+    Transform player;
 
-    // --- Inicialização ---
+    float baseSpeed;
+    int patrolIndex = -1;
+    int patrolDirection = 1;                // 1 = para a frente, -1 = para trás
+    float patrolRepathTimer;
+
+    Vector3 lastKnownPlayerPos;
+    float timeSinceLastSeen;
+
+    void OnEnable()
+    {
+        allBots.Add(this);
+    }
+
+    void OnDisable()
+    {
+        allBots.Remove(this);
+    }
+
     void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
-        health = GetComponent<Health>();
-
+        if (agent) baseSpeed = agent.speed;
+        if (!eyes) eyes = transform;
         if (!animator) animator = GetComponentInChildren<Animator>();
-        if (animator) animator.applyRootMotion = false;
+        if (!combat) combat = GetComponent<BotCombat>();
 
-        if (agent) originalSpeed = agent.speed;
-        agent.stoppingDistance = 0.0f;
-    }
-
-    public override void OnNetworkSpawn()
-    {
-        // --- CONTROLO DA IA ---
-        // A IA (cérebro) SÓ DEVE CORRER NO SERVIDOR (HOST).
-        // Clientes não precisam de pensar pelos bots, eles só recebem a posição.
-        // (Vamos assumir que o prefab do Bot tem um NetworkTransform para sincronizar a posição,
-        // mas a lógica da IA só corre aqui).
-        if (!IsServer)
+        if (healthSource == null)
         {
-            // Se eu não sou o servidor, desativo a IA e o NavMeshAgent.
-            // Eu sou só um "fantoche" à espera de ordens da rede.
-            agent.enabled = false;
-            this.enabled = false; // Desativa este script (Update, etc.)
-            return;
+            // tenta auto-encontrar um componente chamado "Health"
+            var h = GetComponent("Health");
+            if (h != null) healthSource = (MonoBehaviour)h;
         }
 
-        // Se sou o Servidor, continuo a inicialização
-        if (health)
-        {
-            health.OnDied.RemoveListener(OnDeath); health.OnDied.AddListener(OnDeath);
-            health.OnTookDamage -= HandleTookDamage; health.OnTookDamage += HandleTookDamage;
-        }
+        // Escolher direcção aleatória de patrulha (subir ou descer o array de WPs)
+        patrolDirection = Random.value < 0.5f ? 1 : -1;
 
-        target = null;
+        // patrolIndex fica a -1, a TickPatrol escolhe o primeiro destino
         patrolIndex = -1;
-        currentState = BotState.Patrol;
-        if (agent && agent.isActiveAndEnabled && agent.isOnNavMesh)
-        {
-            agent.isStopped = false;
-            agent.speed = originalSpeed;
-            SetNextPatrolPoint();
-        }
     }
 
-
-    public override void OnNetworkDespawn()
+    void Start()
     {
-        // Limpa subscrições (mesmo no servidor)
-        if (health)
+        FindPlayerRef();
+        ChangeState(BotState.Patrol);
+    }
+
+    void FindPlayerRef()
+    {
+        if (!player && !string.IsNullOrEmpty(playerTag))
         {
-            health.OnDied.RemoveListener(OnDeath);
-            health.OnTookDamage -= HandleTookDamage;
-        }
-        if (agent && agent.isActiveAndEnabled)
-        {
-            agent.isStopped = true;
-            if(agent.isOnNavMesh) agent.ResetPath();
+            var go = GameObject.FindGameObjectWithTag(playerTag);
+            if (go) player = go.transform;
         }
     }
 
-    // --- Ciclo Principal ---
     void Update()
     {
-        // Se este script está a correr, já sabemos que somos o Servidor (devido ao OnNetworkSpawn)
-        
-        if (health == null || health.isDead.Value || !agent || !agent.isOnNavMesh) // <<< USA .Value
-        {
-            if (agent && agent.isActiveAndEnabled) agent.isStopped = true;
+        if (!agent || !agent.isOnNavMesh)
             return;
+
+        FindPlayerRef();
+
+        float health01 = GetHealth01();
+        bool lowHealth = health01 > 0f && health01 <= lowHealthThreshold;
+
+        float ammo01 = 1f;
+        bool lowAmmo = false;
+        if (combat)
+        {
+            ammo01 = combat.AmmoNormalized;
+            lowAmmo = ammo01 <= lowAmmoThreshold;
         }
 
-        if (currentState != BotState.Retreat)
+        bool playerVisible = false;
+        float distToPlayer = Mathf.Infinity;
+        if (player)
         {
-            DetectTarget();
+            distToPlayer = Vector3.Distance(transform.position, player.position);
+            playerVisible = CanSeePlayer(distToPlayer);
         }
 
-        UpdateStateMachine();
-        UpdateAnimation();
-    }
-
-    // --- Máquina de Estados ---
-    private void UpdateStateMachine()
-    {
-        switch (currentState)
+        if (playerVisible)
         {
-            case BotState.Patrol: DoPatrol(); break;
-            case BotState.Chase: DoChase(); break;
-            case BotState.Search: DoSearch(); break;
-            case BotState.Attack: DoAttack(); break;
-            case BotState.Retreat: DoRetreat(); break;
-        }
-    }
-
-    // --- Lógica de Cada Estado ---
-
-    private void DoPatrol()
-    {
-        agent.isStopped = false;
-        agent.speed = originalSpeed;
-
-        if ((!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + waypointTolerance) || !agent.hasPath)
-        {
-            SetNextPatrolPoint();
-        }
-    }
-
-
-    private void DoChase()
-    {
-        agent.isStopped = false;
-        agent.speed = originalSpeed;
-
-        if (target && HasLineOfSight(target))
-        {
-            lastKnownTargetPosition = target.position;
-            loseTargetTimer = loseSightChaseTime;
-            lostSightMessageShown = false;
+            lastKnownPlayerPos = player.position;
+            timeSinceLastSeen = 0f;
         }
         else
         {
-            if (!lostSightMessageShown)
+            timeSinceLastSeen += Time.deltaTime;
+        }
+
+        // --------- DECISÃO DE ESTADO (prioridades) ----------
+        // 1) Vida baixa -> fugir / ir buscar vida
+        if (lowHealth)
+        {
+            if (currentState != BotState.Retreat)
+                ChangeState(BotState.Retreat);
+        }
+        // 2) Ammo baixa (e não lowHealth) -> ir buscar ammo
+        else if (lowAmmo && currentState != BotState.GoToAmmo)
+        {
+            ChangeState(BotState.GoToAmmo);
+        }
+        else
+        {
+            // 3) Combate baseado na visão do player
+            if (playerVisible && distToPlayer <= giveUpDistance)
             {
-                // Debug.Log(gameObject.name + " LOST Line of Sight. Starting lose timer...");
-                lostSightMessageShown = true;
-            }
-
-            loseTargetTimer -= Time.deltaTime;
-            if (loseTargetTimer <= 0)
-            {
-                TransitionToSearch();
-                return;
-            }
-        }
-
-        if (agent.destination != lastKnownTargetPosition)
-        {
-            agent.SetDestination(lastKnownTargetPosition);
-        }
-
-        float distanceSqr = (transform.position - lastKnownTargetPosition).sqrMagnitude;
-        if (distanceSqr <= attackDistance * attackDistance)
-        {
-            TransitionToAttack();
-        }
-    }
-
-    private void DoSearch()
-    {
-        agent.isStopped = false;
-        agent.speed = originalSpeed * 0.75f;
-
-        if (agent.destination != lastKnownTargetPosition && (!agent.hasPath || agent.remainingDistance > waypointTolerance))
-        {
-             agent.SetDestination(lastKnownTargetPosition);
-        }
-
-        if (!agent.pathPending && agent.remainingDistance <= waypointTolerance)
-        {
-            agent.isStopped = true;
-            searchTimer -= Time.deltaTime;
-            if (searchTimer <= 0)
-            {
-                TransitionToPatrol();
-            }
-        }
-    }
-
-    private void DoAttack()
-    {
-        agent.isStopped = true;
-
-        if (target == null)
-        {
-            TransitionToSearch();
-            return;
-        }
-
-        Vector3 direction = (target.position - transform.position);
-        direction.y = 0;
-        if (direction.sqrMagnitude > 0.01f)
-        {
-            Quaternion lookRotation = Quaternion.LookRotation(direction.normalized);
-            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * agent.angularSpeed * 1.5f);
-        }
-
-        float distanceSqr = (transform.position - target.position).sqrMagnitude;
-        if (distanceSqr > chaseDistance * chaseDistance)
-        {
-            TransitionToChase();
-        }
-        else if (!HasLineOfSight(target))
-        {
-             TransitionToSearch();
-        }
-    }
-
-    private void DoRetreat()
-    {
-        agent.isStopped = false;
-
-        if (!agent.pathPending && agent.remainingDistance < 1.0f)
-        {
-            agent.isStopped = true;
-            retreatTimer -= Time.deltaTime;
-
-            if (retreatTimer <= 0)
-            {
-                 // CORREÇÃO (CS0019 - Linha 399): Usa .Value para ler a vida
-                 bool stillLowHealth = (health.currentHealth.Value / health.maxHealth) <= healthThreshold;
-                 bool stillSeeTarget = target && HasLineOfSight(target);
-
-                if (stillLowHealth && stillSeeTarget)
-                {
-                    FindAndSetFleePoint();
-                }
+                if (distToPlayer <= idealCombatDistance * 1.1f)
+                    ChangeState(BotState.Attack);
                 else
+                    ChangeState(BotState.Chase);
+            }
+            else
+            {
+                // perdeu visão: se ainda está dentro do tempo de procura
+                if (timeSinceLastSeen > 0f && timeSinceLastSeen <= maxSearchTime &&
+                    (currentState == BotState.Chase || currentState == BotState.Attack))
                 {
-                    TransitionToPatrol();
+                    ChangeState(BotState.Search);
+                }
+                else if (timeSinceLastSeen > maxSearchTime &&
+                         (currentState == BotState.Search || currentState == BotState.Chase || currentState == BotState.Attack))
+                {
+                    ChangeState(BotState.Patrol);
                 }
             }
         }
-    }
 
-    // --- Métodos de Transição de Estado ---
-
-    private void TransitionToPatrol()
-    {
-        currentState = BotState.Patrol;
-        agent.speed = originalSpeed;
-        agent.isStopped = false;
-        target = null;
-        lostSightMessageShown = false;
-        SetNextPatrolPoint();
-    }
-
-    private void TransitionToChase()
-    {
-        currentState = BotState.Chase;
-        agent.speed = originalSpeed;
-        agent.isStopped = false;
-        loseTargetTimer = loseSightChaseTime;
-        lostSightMessageShown = false;
-    }
-
-    private void TransitionToSearch()
-    {
-        currentState = BotState.Search;
-        agent.speed = originalSpeed * 0.75f;
-        agent.isStopped = false;
-        searchTimer = searchWaitTime;
-        lostSightMessageShown = false;
-    }
-
-    private void TransitionToAttack()
-    {
-        currentState = BotState.Attack;
-        agent.isStopped = true;
-        lostSightMessageShown = false;
-    }
-
-    private void TransitionToRetreat()
-    {
-         if (target == null && lastKnownTargetPosition == Vector3.zero)
-         {
-            TransitionToPatrol();
-            return;
-         }
-
-        currentState = BotState.Retreat;
-        agent.speed = originalSpeed * retreatSpeedMultiplier;
-        agent.isStopped = false;
-        lostSightMessageShown = false;
-
-        FindAndSetFleePoint();
-    }
-
-    // --- Lógica de Eventos e Funções Auxiliares ---
-
-    private void HandleTookDamage(float damageAmount, Transform attacker)
-    {
-        if (health.isDead.Value) return; // <<< USA .Value
-
-        target = attacker;
-        lastKnownTargetPosition = attacker ? attacker.position : transform.position;
-        
-        // CORREÇÃO (CS0019 - Linha 292): Usa .Value para ler a vida
-        float healthRatio = health.currentHealth.Value / health.maxHealth;
-        
-        if (healthRatio <= healthThreshold && currentState != BotState.Retreat)
+        // --------- EXECUÇÃO DO ESTADO ----------
+        switch (currentState)
         {
-            TransitionToRetreat();
+            case BotState.Patrol: TickPatrol(); break;
+            case BotState.Chase: TickChase(); break;
+            case BotState.Attack: TickAttack(); break;
+            case BotState.Search: TickSearch(); break;
+            case BotState.Retreat: TickRetreat(); break;
+            case BotState.GoToAmmo: TickGoToAmmo(); break;
         }
-        else if (currentState != BotState.Retreat)
-        {
-             TransitionToChase();
-        }
+
+        UpdateAnimator();
     }
 
-    private void OnDeath()
-    {
-        if(agent && agent.isActiveAndEnabled) agent.enabled = false;
-        if (animator) animator.SetFloat("Speed", 0f);
-        currentState = BotState.Patrol;
-        target = null;
-    }
-
-    private void SetNextPatrolPoint()
+    // --------------------------------------------------------------------
+    // ESTADOS
+    // --------------------------------------------------------------------
+    void TickPatrol()
     {
         if (patrolPoints == null || patrolPoints.Length == 0)
         {
-            if (agent && agent.isOnNavMesh) agent.isStopped = true;
+            agent.isStopped = true;
             return;
         }
 
-        patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
+        agent.isStopped = false;
+        agent.speed = baseSpeed;
 
-        if (patrolPoints[patrolIndex] == null)
+        // Se ainda não temos índice, escolhe um ponto inicial aleatório
+        if (patrolIndex < 0 || patrolIndex >= patrolPoints.Length)
         {
-             if (agent && agent.isOnNavMesh) agent.isStopped = true;
-             return;
-        }
-
-        if (agent && agent.isOnNavMesh)
-        {
+            patrolIndex = Random.Range(0, patrolPoints.Length);
             agent.SetDestination(patrolPoints[patrolIndex].position);
-            agent.isStopped = false;
+            return;
         }
+
+        Transform curWp = patrolPoints[patrolIndex];
+        if (!curWp)
+        {
+            AdvancePatrolIndex();
+            curWp = patrolPoints[patrolIndex];
+            agent.SetDestination(curWp.position);
+            return;
+        }
+
+        // Distância real ao waypoint (não confiar só em remainingDistance)
+        float sqrDist = (curWp.position - transform.position).sqrMagnitude;
+        float tol = waypointTolerance > 0f ? waypointTolerance : 0.6f;
+
+        if (!agent.hasPath || sqrDist <= tol * tol)
+        {
+            // Passa ao próximo waypoint
+            AdvancePatrolIndex();
+            Transform nextWp = patrolPoints[patrolIndex];
+            if (nextWp)
+            {
+                agent.SetDestination(nextWp.position);
+            }
+        }
+
+        if (combat) combat.SetInCombat(false);
     }
 
-    private void FindAndSetFleePoint()
+    void TickChase()
     {
-        Vector3 fleeFromPos = (target != null) ? target.position : lastKnownTargetPosition;
-        if (fleeFromPos == Vector3.zero) fleeFromPos = transform.position + transform.forward * -10f;
-
-        Vector3 runDirection = transform.position - fleeFromPos;
-        runDirection.y = 0;
-        Vector3 runPoint = transform.position + runDirection.normalized * (viewRadius * 1.2f);
-
-        if (NavMesh.SamplePosition(runPoint, out NavMeshHit hit, viewRadius * 1.5f, NavMesh.AllAreas))
+        if (!player)
         {
-             if(agent.isOnNavMesh) agent.SetDestination(hit.position);
-             retreatTimer = retreatReassessTime;
-             agent.isStopped = false;
+            ChangeState(BotState.Search);
+            return;
+        }
+
+        agent.isStopped = false;
+        agent.speed = baseSpeed;
+        agent.SetDestination(player.position);
+
+        if (combat) combat.SetInCombat(true);
+    }
+
+    void TickAttack()
+    {
+        if (!player)
+        {
+            ChangeState(BotState.Search);
+            return;
+        }
+
+        Vector3 toPlayer = player.position - transform.position;
+        float dist = toPlayer.magnitude;
+
+        // ajusta distância ideal
+        if (dist > idealCombatDistance + 1f)
+        {
+            // aproximar
+            agent.isStopped = false;
+            agent.speed = baseSpeed;
+            agent.SetDestination(player.position);
+        }
+        else if (dist < tooCloseDistance)
+        {
+            // recuar um pouco mas a combater
+            agent.isStopped = false;
+            Vector3 away = (transform.position - player.position).normalized;
+            Vector3 dest = transform.position + away * 3f;
+            agent.SetDestination(dest);
         }
         else
         {
-            TransitionToPatrol();
+            // zona confortável -> para de andar
+            agent.isStopped = true;
+            agent.ResetPath();
         }
+
+        if (combat) combat.SetInCombat(true);
     }
 
-    private void DetectTarget()
+    void TickSearch()
     {
-        if (currentState == BotState.Attack || currentState == BotState.Retreat) return;
+        // Vai até ao último local onde viu o player, fica lá um bocado,
+        // depois volta a patrulhar (já é tratado no Update pelas transições tempo > maxSearchTime)
+        agent.isStopped = false;
+        agent.speed = baseSpeed;
+        agent.SetDestination(lastKnownPlayerPos);
 
-        Collider[] hitsInViewRadius = Physics.OverlapSphere(transform.position, viewRadius, targetMask, QueryTriggerInteraction.Ignore);
-        Transform closestVisibleTarget = null;
-        float minDistanceSqr = viewRadius * viewRadius + 1f;
-
-        foreach (var hitCollider in hitsInViewRadius)
-        {
-            if (hitCollider.transform.root == transform.root) continue;
-
-             Health targetHealth = hitCollider.GetComponentInParent<Health>();
-             if (targetHealth == null || targetHealth.isDead.Value) continue; // <<< USA .Value
-
-            Transform potentialTarget = hitCollider.transform;
-            Vector3 directionToTarget = potentialTarget.position - transform.position;
-            float distanceSqr = directionToTarget.sqrMagnitude;
-
-            if (distanceSqr > minDistanceSqr) continue;
-
-            float angleToTarget = Vector3.Angle(transform.forward, directionToTarget.normalized);
-            if (angleToTarget <= viewAngle * 0.5f)
-            {
-                if (HasLineOfSight(potentialTarget))
-                {
-                    minDistanceSqr = distanceSqr;
-                    closestVisibleTarget = potentialTarget;
-                }
-            }
-        }
-
-        if (closestVisibleTarget != null)
-        {
-            if (target != closestVisibleTarget)
-            {
-                target = closestVisibleTarget;
-                TransitionToChase();
-            }
-            else if (currentState == BotState.Search)
-            {
-                 TransitionToChase();
-            }
-        }
+        if (combat) combat.SetInCombat(false);
     }
 
-
-    private bool HasLineOfSight(Transform t)
+    void TickRetreat()
     {
-        if (t == null) return false;
+        // tenta ir ao pickup de vida mais próximo; se não houver, foge na direcção oposta ao player
+        agent.isStopped = false;
+        agent.speed = baseSpeed * retreatSpeedMultiplier;
 
-        Vector3 eyesPosition = transform.position + Vector3.up * 1.6f + transform.forward * 0.3f;
-        Vector3 targetCenter = t.position + Vector3.up * 1.0f;
-        Collider targetCollider = t.GetComponentInChildren<Collider>();
-        if (targetCollider) targetCenter = targetCollider.bounds.center;
-
-        Vector3 direction = targetCenter - eyesPosition;
-        float distance = direction.magnitude;
-
-        if (Physics.Raycast(eyesPosition, direction.normalized, out RaycastHit hit, distance, obstacleMask, QueryTriggerInteraction.Ignore))
+        Transform hp = GetClosestTransform(healthPickups, transform.position);
+        if (hp != null)
         {
-            if (hit.transform.root != t.root)
-            {
+            agent.SetDestination(hp.position);
+        }
+        else if (player)
+        {
+            Vector3 away = (transform.position - player.position).normalized;
+            Vector3 dest = transform.position + away * 8f;
+            agent.SetDestination(dest);
+        }
+
+        // ainda pode disparar se o player estiver perto (decidido no BotCombat através de inCombat)
+        if (combat) combat.SetInCombat(true);
+    }
+
+    void TickGoToAmmo()
+    {
+        agent.isStopped = false;
+        agent.speed = baseSpeed;
+
+        Transform ammo = GetClosestTransform(ammoPickups, transform.position);
+        if (ammo != null)
+        {
+            agent.SetDestination(ammo.position);
+        }
+        else
+        {
+            // se não houver pontos de ammo definidos, volta a patrulhar
+            ChangeState(BotState.Patrol);
+        }
+
+        if (combat) combat.SetInCombat(false);
+    }
+
+    // --------------------------------------------------------------------
+    // VISÃO / DETEÇÃO
+    // --------------------------------------------------------------------
+    bool CanSeePlayer(float distToPlayer)
+    {
+        if (!player) return false;
+
+        if (distToPlayer > viewRadius)
+            return false;
+
+        // verifica se não há paredes no meio (raycast dos olhos até ao player)
+        Vector3 origin = eyes.position;
+        Vector3 targetPos = player.position + Vector3.up * 1.0f;
+        Vector3 dir = (targetPos - origin);
+        float dist = dir.magnitude;
+        if (dist <= 0.01f) return true;
+
+        dir /= dist;
+
+        if (Physics.Raycast(origin, dir, out RaycastHit hit, dist, obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            // bateu em algo ANTES do player -> visão bloqueada
+            if (hit.collider.transform != player && hit.collider.transform.root != player)
                 return false;
-            }
         }
+
         return true;
     }
 
-    private void UpdateAnimation()
+    // --------------------------------------------------------------------
+    // UTILITÁRIOS
+    // --------------------------------------------------------------------
+    void AdvancePatrolIndex()
     {
-        if (!animator || !agent || !agent.isActiveAndEnabled)
-        {
-            if (animator) animator.SetFloat("Speed", 0f);
+        if (patrolPoints == null || patrolPoints.Length == 0)
             return;
+
+        if (patrolDirection >= 0)
+        {
+            patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
+        }
+        else
+        {
+            patrolIndex--;
+            if (patrolIndex < 0) patrolIndex = patrolPoints.Length - 1;
+        }
+    }
+
+    Transform GetClosestTransform(Transform[] list, Vector3 from)
+    {
+        if (list == null || list.Length == 0) return null;
+        Transform best = null;
+        float bestSqr = float.MaxValue;
+        foreach (var t in list)
+        {
+            if (!t) continue;
+            float d = (t.position - from).sqrMagnitude;
+            if (d < bestSqr)
+            {
+                bestSqr = d;
+                best = t;
+            }
+        }
+        return best;
+    }
+
+    float GetHealth01()
+    {
+        if (healthSource == null) return 1f;
+
+        var t = healthSource.GetType();
+
+        float cur = 0f;
+        float max = 0f;
+        bool gotCur = false;
+        bool gotMax = false;
+
+        var fCur = t.GetField(healthCurrentField);
+        if (fCur != null && (fCur.FieldType == typeof(float) || fCur.FieldType == typeof(int)))
+        {
+            cur = fCur.FieldType == typeof(int) ? (int)fCur.GetValue(healthSource) : (float)fCur.GetValue(healthSource);
+            gotCur = true;
+        }
+        var pCur = t.GetProperty(healthCurrentField);
+        if (!gotCur && pCur != null && (pCur.PropertyType == typeof(float) || pCur.PropertyType == typeof(int)))
+        {
+            cur = pCur.PropertyType == typeof(int) ? (int)pCur.GetValue(healthSource) : (float)pCur.GetValue(healthSource);
+            gotCur = true;
         }
 
-        Vector3 desiredVelocity = agent.desiredVelocity;
-        Vector3 localDesiredVel = transform.InverseTransformDirection(desiredVelocity);
-        float speed = localDesiredVel.z / agent.speed;
-        speed = Mathf.Clamp01(speed);
-        animator.SetFloat("Speed", speed * animationSpeedMultiplier, 0.1f, Time.deltaTime);
+        var fMax = t.GetField(healthMaxField);
+        if (fMax != null && (fMax.FieldType == typeof(float) || fMax.FieldType == typeof(int)))
+        {
+            max = fMax.FieldType == typeof(int) ? (int)fMax.GetValue(healthSource) : (float)fMax.GetValue(healthSource);
+            gotMax = true;
+        }
+        var pMax = t.GetProperty(healthMaxField);
+        if (!gotMax && pMax != null && (pMax.PropertyType == typeof(float) || pMax.PropertyType == typeof(int)))
+        {
+            max = pMax.PropertyType == typeof(int) ? (int)pMax.GetValue(healthSource) : (float)pMax.GetValue(healthSource);
+            gotMax = true;
+        }
+
+        if (!gotCur || !gotMax || max <= 0.001f)
+            return 1f;
+
+        return Mathf.Clamp01(cur / max);
+    }
+
+    void ChangeState(BotState newState)
+    {
+        if (currentState == newState) return;
+
+        if (debugLogs)
+            Debug.Log($"[{name}] {currentState} -> {newState}");
+
+        currentState = newState;
+
+        if (currentState == BotState.Search)
+        {
+            // quando entra em Search, vai para último local visto
+            if (lastKnownPlayerPos != Vector3.zero)
+                agent.SetDestination(lastKnownPlayerPos);
+        }
+
+        // Comunicar com BotCombat
+        if (combat)
+        {
+            bool inCombat =
+                (currentState == BotState.Chase) ||
+                (currentState == BotState.Attack) ||
+                (currentState == BotState.Retreat); // pode disparar enquanto foge
+
+            combat.SetInCombat(inCombat);
+        }
+
+        // Alertar outros bots quando entra em combate
+        if (currentState == BotState.Chase || currentState == BotState.Attack)
+        {
+            AlertNearbyBots();
+        }
+    }
+
+    void AlertNearbyBots()
+    {
+        if (!player) return;
+
+        foreach (var bot in allBots)
+        {
+            if (!bot || bot == this) continue;
+            float d = Vector3.Distance(transform.position, bot.transform.position);
+            if (d <= alertRadius)
+            {
+                bot.OnAllySpottedPlayer(player.position);
+            }
+        }
+    }
+
+    public void OnAllySpottedPlayer(Vector3 pos)
+    {
+        lastKnownPlayerPos = pos;
+        timeSinceLastSeen = 0f;
+
+        if (currentState == BotState.Patrol || currentState == BotState.Search)
+        {
+            ChangeState(BotState.Chase);
+        }
+    }
+
+    void UpdateAnimator()
+    {
+        if (!animator || !agent) return;
+
+        Vector3 vel = agent.velocity;
+        float speed = vel.magnitude;
+        animator.SetFloat("Speed", speed);
+    }
+
+    // Chamado no futuro por sistema de som (explosões, tiros, etc.)
+    public void HearSound(Vector3 pos, float loudness)
+    {
+        // --- APAGA OU COMENTA TUDO O QUE ESTÁ AQUI DENTRO ---
+
+        /* float dist = Vector3.Distance(transform.position, pos);
+        if (dist < viewRadius * 0.6f)
+        {
+            lastKnownPlayerPos = pos;
+            timeSinceLastSeen = 0f;
+            if (currentState == BotState.Patrol)
+                ChangeState(BotState.Search);
+        }
+        */
     }
 }

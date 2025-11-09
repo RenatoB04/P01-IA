@@ -1,165 +1,223 @@
 using UnityEngine;
-using UnityEngine.AI;
+using Unity.Netcode; // <-- IMPORTANTE
 
-public class BotCombat : MonoBehaviour
+/// <summary>
+/// Lida com tiro, munições, reload e troca rifle/pistola para o bot.
+/// AGORA é um NetworkBehaviour para poder spawnar balas de rede.
+/// </summary>
+public class BotCombat : NetworkBehaviour // <-- MODIFICADO
 {
-    [Header("Refs (preenche no Inspector)")]
-    public Weapon weapon;                 // arma do bot
-    public Transform shootPoint;          // ponta da arma / firePoint
-    public Transform eyes;                // ponto dos "olhos" (1.2–1.6m)
-
-    [Header("Alvo")]
+    [Header("Refs")]
+    public Transform shootPoint;      // ponta da arma
+    public Transform eyes;           // ponto para mirar (se null, usa shootPoint ou transform)
     public string playerTag = "Player";
-    public LayerMask playerLayer;         // layer do Player
 
-    [Header("Visão / Tiro")]
-    [Range(30f, 180f)] public float fovDegrees = 130f;   // cone de visão (total)
-    public float attackRange = 25f;                       // alcance máximo
-    public float stopDistance = 8f;                       // distância de “paragem/combate”
-    public float aimTurnSpeed = 360f;                     // °/s para virar o corpo
-    [Range(1f, 45f)] public float maxShootAngle = 12f;    // só atira se estiver quase virado
-    public float fireCooldown = 0.8f;                     // para atirar mais devagar
-    public float aimHeightOffset = 1.1f;                  // ponto onde mira no player (peito)
+    [Tooltip("Layer do jogador (usado para verificar o hit).")]
+    public LayerMask playerLayer;
 
-    [Header("LOS / Obstáculos")]
-    public LayerMask obstacleMask = ~0;   // layers que bloqueiam visão (NÃO incluir player)
+    [Tooltip("Layers de obstáculos (paredes, chão, etc.) que bloqueiam o tiro.")]
+    public LayerMask obstacleLayer;
 
-    [Header("Debug")]
-    public bool debugLogs = false;
-    public bool drawRays = true;
+    [Header("Projectile (Netcode)")]
+    [Tooltip("Prefab da bala de rede (o que tem Bullet.cs).")]
+    public GameObject bulletPrefab; // <-- Arrastar o teu Prefab "Bullet"
+    [Tooltip("Velocidade do prefab da bala.")]
+    public float bulletSpeed = 40f;
 
-    NavMeshAgent agent;
+    [Header("Rifle")]
+    public int rifleMagSize = 30;
+    public int rifleReserveAmmo = 90;
+    public float rifleFireRate = 10f;
+    public float rifleReloadTime = 1.5f;
+    public float rifleDamage = 10f;
+
+    [Header("Pistola")]
+    public int pistolMagSize = 12;
+    public int pistolReserveAmmo = 48;
+    public float pistolFireRate = 3f;
+    public float pistolReloadTime = 1.2f;
+    public float pistolDamage = 12f;
+
+    [Header("Geral")]
+    public float maxShootDistance = 200f;
+    public bool drawDebugRays = false;
+
+    // Exposto para a AI
+    public float AmmoNormalized
+    {
+        get
+        {
+            float curTotal = rifleMag + rifleRes + pistolMag + pistolRes;
+            float maxTotal = rifleMagSize + rifleReserveAmmo + pistolMagSize + pistolReserveAmmo;
+            if (maxTotal <= 0f) return 0f;
+            return Mathf.Clamp01(curTotal / maxTotal);
+        }
+    }
+
     Transform player;
-    float nextFireTime;
+    bool inCombat = false;
+    enum WeaponSlot { Rifle, Pistol }
+    WeaponSlot currentWeapon = WeaponSlot.Rifle;
+    int rifleMag, rifleRes, pistolMag, pistolRes;
+    bool isReloading = false;
+    float reloadTimer = 0f;
+    float fireCooldown = 0f;
+    LayerMask shootMask;
 
     void Awake()
     {
-        agent = GetComponent<NavMeshAgent>();
+        if (!eyes) eyes = shootPoint != null ? shootPoint : transform;
+        rifleMag = rifleMagSize;
+        rifleRes = rifleReserveAmmo;
+        pistolMag = pistolMagSize;
+        pistolRes = pistolReserveAmmo;
+        shootMask = playerLayer | obstacleLayer;
+    }
 
-        // Encontrar Player por Tag
-        if (!string.IsNullOrEmpty(playerTag))
+    void Start()
+    {
+        if (!player && !string.IsNullOrEmpty(playerTag))
         {
             var go = GameObject.FindGameObjectWithTag(playerTag);
             if (go) player = go.transform;
         }
-        
-        // Fallback por Layer (procura qualquer objeto com Health na layer do player)
-        if (!player && playerLayer.value != 0)
-        {
-            var all = Object.FindObjectsByType<Health>(FindObjectsSortMode.None);
-            foreach (var h in all)
-            {
-                if (((1 << h.gameObject.layer) & playerLayer.value) != 0)
-                {
-                    player = h.transform;
-                    break;
-                }
-            }
-        }
-
-        // Refs da arma
-        if (!weapon) weapon = GetComponentInChildren<Weapon>(true);
-        if (!shootPoint && weapon) shootPoint = weapon.firePoint;
-        if (!eyes) eyes = transform;
-
-        if (debugLogs)
-            Debug.Log($"[BotCombat] init: weapon={(weapon?weapon.name:"null")}, shootPoint={(shootPoint?shootPoint.name:"null")}, player={(player?player.name:"null")}");
     }
 
     void Update()
     {
-        if (!weapon || !shootPoint || !player) return;
+        // Só o servidor (Host) pode controlar a lógica do bot
+        if (!IsServer) return;
 
-        // Distância & ponto de mira no player
-        Vector3 aimPoint = player.position + Vector3.up * aimHeightOffset;
-        float dist = Vector3.Distance(transform.position, aimPoint);
-        if (dist > attackRange) { if (debugLogs) Debug.Log("[BotCombat] muito longe"); return; }
-
-        // Tem de estar suficientemente perto do ponto de combate
-        bool closeEnough = dist <= Mathf.Max(stopDistance + 0.5f, stopDistance * 1.05f);
-        if (!closeEnough) { if (debugLogs) Debug.Log("[BotCombat] a aproximar"); return; }
-
-        // Verificar se o alvo está dentro do FOV (frente do bot, plano XZ)
-        Vector3 to = (aimPoint - transform.position);
-        Vector3 toFlat = to; toFlat.y = 0f; toFlat.Normalize();
-        Vector3 fwdFlat = transform.forward; fwdFlat.y = 0f; fwdFlat.Normalize();
-
-        float angleToTarget = Vector3.Angle(fwdFlat, toFlat);
-        float halfFov = fovDegrees * 0.5f;
-        bool inFov = angleToTarget <= halfFov;
-        if (!inFov)
+        if (!player)
         {
-            // vira o corpo na direção do alvo, mas não dispara fora do FOV
-            RotateBodyTowards(toFlat);
-            if (drawRays) Debug.DrawRay(transform.position, fwdFlat * 1.5f, Color.yellow);
+            var go = GameObject.FindGameObjectWithTag(playerTag);
+            if (go) player = go.transform;
+        }
+
+        fireCooldown -= Time.deltaTime;
+        if (isReloading)
+        {
+            reloadTimer -= Time.deltaTime;
+            if (reloadTimer <= 0f) FinishReload();
             return;
         }
 
-        // LOS real: raycast dos olhos até ao alvo; só conta se o PRIMEIRO hit for o player
-        Vector3 eyesPos = eyes.position;
-        Vector3 dirEyes = (aimPoint - eyesPos);
-        float rayLen = dirEyes.magnitude;
+        if (!inCombat) TryTacticalReload();
+        if (inCombat && player) TryShootAtPlayer();
+    }
 
-        // Monta a máscara: obstáculos + layer do player (para podermos acertar no player)
-        int playerLayerIndex = GetSingleLayerIndex(playerLayer);
-        LayerMask losMask = obstacleMask;
-        if (playerLayerIndex >= 0) losMask |= (1 << playerLayerIndex);
+    public void SetInCombat(bool value)
+    {
+        inCombat = value;
+    }
 
-        bool hitSomething = Physics.Raycast(eyesPos, dirEyes.normalized, out var hit, rayLen, losMask, QueryTriggerInteraction.Ignore);
-        if (drawRays) Debug.DrawRay(eyesPos, dirEyes.normalized * Mathf.Min(rayLen, 3f), hitSomething ? Color.red : Color.green);
+    // --- LÓGICA DE TIRO MODIFICADA PARA NETCODE ---
+    void TryShootAtPlayer()
+    {
+        if (!player || !IsServer || fireCooldown > 0f) return;
 
-        bool hasClearLOS = hitSomething && hit.transform == player; // PRIMEIRO contacto tem de ser o player
-        if (!hasClearLOS)
+        EnsureUsableWeapon();
+
+        if (GetCurrentMag() <= 0 && GetCurrentReserve() <= 0) return;
+        if (GetCurrentMag() <= 0 && GetCurrentReserve() > 0)
         {
-            if (debugLogs) Debug.Log($"[BotCombat] sem LOS (parede/obstáculo entre bot e player)");
-            // vira o corpo para o alvo mesmo assim
-            RotateBodyTowards(toFlat);
-            return; // >>> NÃO dispara nem tenta apontar para a parede <<<
+            StartReload();
+            return;
         }
 
-        // Virar o corpo no plano XZ em direção ao player
-        RotateBodyTowards(toFlat);
+        Vector3 origin = shootPoint ? shootPoint.position : eyes.position;
+        Vector3 targetPos = player.position + Vector3.up * 1.1f;
+        Vector3 dir = (targetPos - origin).normalized;
 
-        // Só dispara quando estiver suficientemente alinhado (ângulo pequeno)
-        bool wellAligned = angleToTarget <= maxShootAngle;
-
-        // Roda apenas o cano da arma para "fino ajuste"
-        if (wellAligned)
+        Vector3 flatDir = new Vector3(dir.x, 0f, dir.z);
+        if (flatDir.sqrMagnitude > 0.001f)
         {
-            Vector3 from = shootPoint.position;
-            Vector3 dir = (aimPoint - from);
-            if (dir.sqrMagnitude > 0.0001f)
+            Quaternion wantRot = Quaternion.LookRotation(flatDir, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, wantRot, Time.deltaTime * 10f);
+        }
+
+        if (drawDebugRays)
+            Debug.DrawRay(origin, dir * maxShootDistance, Color.red, 0.1f);
+
+        // Dispara a bala de rede (o teu Bullet.cs / BulletProjectile)
+        if (bulletPrefab != null)
+        {
+            GameObject bullet = Instantiate(bulletPrefab, origin, Quaternion.LookRotation(dir));
+
+            var bp = bullet.GetComponent<BulletProjectile>();
+            var rb = bullet.GetComponent<Rigidbody>();
+            var netObj = bullet.GetComponent<NetworkObject>();
+
+            if (bp != null && rb != null && netObj != null)
             {
-                Quaternion look = Quaternion.LookRotation(dir, Vector3.up);
-                shootPoint.rotation = Quaternion.Slerp(shootPoint.rotation, look, Time.deltaTime * aimTurnSpeed);
+                // Configura o script BulletProjectile
+                bp.damage = (currentWeapon == WeaponSlot.Rifle) ? rifleDamage : pistolDamage;
+                bp.ownerTeam = -2; // -2 = Equipa "Bot"
+                bp.ownerRoot = transform.root;
+
+                // ----- LINHA CORRIGIDA -----
+                bp.ownerClientId = ulong.MaxValue; // Usa a classe, não a instância
+
+                // Define velocidade e sincroniza
+                rb.linearVelocity = dir * bulletSpeed;
+                bp.initialVelocity.Value = rb.linearVelocity;
+
+                // Spawna a bala na rede
+                netObj.Spawn(true);
+            }
+            else
+            {
+                Debug.LogError($"[BotCombat] bulletPrefab está mal configurado. Falta BulletProjectile (Bullet.cs), Rigidbody ou NetworkObject.");
+                Destroy(bullet);
             }
         }
-
-        // Disparo com cooldown, só se alinhado E com LOS limpo
-        if (wellAligned && Time.time >= nextFireTime)
+        else
         {
-            weapon.ShootExternally();
-            nextFireTime = Time.time + fireCooldown;
-            if (debugLogs) Debug.Log("[BotCombat] SHOOT");
+            Debug.LogWarning("[BotCombat] bulletPrefab é nulo.");
+        }
+
+        ConsumeAmmo();
+        fireCooldown = 1f / GetCurrentFireRate();
+    }
+
+    // --- O resto dos métodos (Reload, Ammo, etc.) ---
+    void EnsureUsableWeapon()
+    {
+        if (GetCurrentMag() <= 0 && GetCurrentReserve() <= 0)
+        {
+            WeaponSlot other = (currentWeapon == WeaponSlot.Rifle) ? WeaponSlot.Pistol : WeaponSlot.Rifle;
+            if (GetTotalAmmo(other) > 0) currentWeapon = other;
         }
     }
-
-    void RotateBodyTowards(Vector3 toFlatDir)
+    void TryTacticalReload()
     {
-        if (toFlatDir.sqrMagnitude < 0.0001f) return;
-        Quaternion want = Quaternion.LookRotation(toFlatDir, Vector3.up);
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, want, aimTurnSpeed * Time.deltaTime);
+        if (GetCurrentReserve() > 0 && GetCurrentMag() < GetCurrentMagSize()) StartReload();
     }
-
-    // Retorna o índice da única layer setada em playerLayer; se houver múltiplas, retorna -1.
-    int GetSingleLayerIndex(LayerMask lm)
+    void StartReload()
     {
-        int mask = lm.value;
-        if (mask == 0) return -1;
-        // se tiver mais de 1 bit, considera inválido
-        if ((mask & (mask - 1)) != 0) return -1;
-        for (int i = 0; i < 32; i++)
-            if ((mask & (1 << i)) != 0) return i;
-        return -1;
+        if (isReloading || GetCurrentReserve() <= 0) return;
+        isReloading = true;
+        reloadTimer = (currentWeapon == WeaponSlot.Rifle) ? rifleReloadTime : pistolReloadTime;
     }
+    void FinishReload()
+    {
+        isReloading = false;
+        int magSize = GetCurrentMagSize();
+        int mag = GetCurrentMag();
+        int reserve = GetCurrentReserve();
+        int needed = magSize - mag;
+        int toLoad = Mathf.Min(needed, reserve);
+        mag += toLoad;
+        reserve -= toLoad;
+        SetCurrentMag(mag);
+        SetCurrentReserve(reserve);
+    }
+    void ConsumeAmmo() => SetCurrentMag(GetCurrentMag() - 1);
+    float GetCurrentFireRate() => (currentWeapon == WeaponSlot.Rifle) ? rifleFireRate : pistolFireRate;
+    int GetCurrentMagSize() => (currentWeapon == WeaponSlot.Rifle) ? rifleMagSize : pistolMagSize;
+    int GetCurrentMag() => (currentWeapon == WeaponSlot.Rifle) ? rifleMag : pistolMag;
+    void SetCurrentMag(int v) { if (currentWeapon == WeaponSlot.Rifle) rifleMag = v; else pistolMag = v; }
+    int GetCurrentReserve() => (currentWeapon == WeaponSlot.Rifle) ? rifleRes : pistolRes;
+    void SetCurrentReserve(int v) { if (currentWeapon == WeaponSlot.Rifle) rifleRes = v; else pistolRes = v; }
+    int GetTotalAmmo(WeaponSlot s) => (s == WeaponSlot.Rifle) ? (rifleMag + rifleRes) : (pistolMag + pistolRes);
 }

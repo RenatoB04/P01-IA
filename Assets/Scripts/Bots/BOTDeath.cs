@@ -1,78 +1,133 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.AI;
+using Unity.Netcode; // <-- LINHA ADICIONADA
 
 public class BOTDeath : MonoBehaviour
 {
     [Header("Refs")]
-    [Tooltip("Componente que tem a bool isDead.")]
+    [Tooltip("Componente que tem a bool isDead (ex: Health script).")]
     public MonoBehaviour health;
     [Tooltip("Nome exato da bool no script de vida (case-sensitive).")]
     public string isDeadField = "isDead";
 
-    [Header("Behavior")]
+    [Header("Comportamento")]
     [Tooltip("Atraso antes de desaparecer (segundos).")]
     public float delay = 0f;
-    [Tooltip("Se true, Destroy(gameObject); se false, SetActive(false).")]
-    public bool destroyInstead = false;
 
-    [Header("Optional: parar IA/colisões antes de desaparecer")]
-    public Behaviour[] toDisableOnDeath;
-    public Collider[] collidersToDisable;
+    [Tooltip("Se true: Destroy(gameObject); se false: SetActive(false).")]
+    public bool destroyInstead = true;
 
-    // Evento por-instância (já usado pelo teu Spawner)
+    [Tooltip("Desativar collider ao morrer.")]
+    public bool disableColliderOnDeath = true;
+
+    [Tooltip("Desativar Animator ao morrer.")]
+    public bool disableAnimatorOnDeath = true;
+
+    [Tooltip("Desativar NavMeshAgent ao morrer.")]
+    public bool disableNavMeshAgentOnDeath = true;
+
+    // Evento por bot (para scripts no mesmo GameObject)
     public event Action<BOTDeath> OnDied;
 
-    // >>> NOVO: evento global para Score/Timer
+    // Evento global (usado pelo BotSpawner_Proto)
     public static event Action OnAnyBotKilled;
 
-    bool handled;
-
-    void Reset()
-    {
-        collidersToDisable = GetComponentsInChildren<Collider>(true);
-    }
-
-    void OnEnable()
-    {
-        handled = false;
-    }
+    bool hasDied = false;
 
     void Update()
     {
-        if (handled || health == null) return;
+        if (hasDied) return;
 
-        var t = health.GetType();
-        var f = t.GetField(isDeadField);
-        var p = t.GetProperty(isDeadField);
+        if (IsHealthDead())
+        {
+            HandleDeath();
+        }
+    }
 
-        bool isDeadNow = false;
-        if (f != null && f.FieldType == typeof(bool)) isDeadNow = (bool)f.GetValue(health);
-        else if (p != null && p.PropertyType == typeof(bool)) isDeadNow = (bool)p.GetValue(health);
+    // ---------- FUNÇÃO MODIFICADA ----------
+    bool IsHealthDead()
+    {
+        if (!health || string.IsNullOrEmpty(isDeadField))
+            return false;
 
-        if (!isDeadNow) return;
+        var type = health.GetType();
 
-        handled = true;
+        // Tenta campo (para NetworkVariable<bool> e bool normal)
+        var field = type.GetField(isDeadField);
+        if (field != null)
+        {
+            // Se for um bool normal
+            if (field.FieldType == typeof(bool))
+            {
+                return (bool)field.GetValue(health);
+            }
 
-        // parar IA/colisões já
-        if (toDisableOnDeath != null)
-            foreach (var b in toDisableOnDeath) if (b) b.enabled = false;
+            // --- CORREÇÃO ADICIONADA ---
+            // Se for uma NetworkVariable<bool>
+            if (field.FieldType == typeof(NetworkVariable<bool>))
+            {
+                // Pede o valor de dentro da NetworkVariable
+                var netVar = (NetworkVariable<bool>)field.GetValue(health);
+                if (netVar != null)
+                    return netVar.Value;
+            }
+            // --- FIM DA CORREÇÃO ---
+        }
 
-        if (collidersToDisable != null)
-            foreach (var c in collidersToDisable) if (c) c.enabled = false;
+        // Tenta propriedade (para bool normal)
+        var prop = type.GetProperty(isDeadField);
+        if (prop != null && prop.PropertyType == typeof(bool))
+        {
+            return (bool)prop.GetValue(health);
+        }
 
-        // notificar antes de desaparecer
+        Debug.LogWarning($"[BOTDeath] Não foi possível encontrar o campo/propriedade '{isDeadField}' do tipo 'bool' ou 'NetworkVariable<bool>' no script '{health.GetType().Name}'.");
+        return false;
+    }
+    // ---------- FIM DA MODIFICAÇÃO ----------
+
+    public void HandleDeath()
+    {
+        if (hasDied) return; // Evita chamadas múltiplas
+        hasDied = true;
+
+        // desativar componentes que não interessam depois de morto
+        if (disableColliderOnDeath)
+        {
+            foreach (var col in GetComponentsInChildren<Collider>())
+                col.enabled = false;
+        }
+
+        if (disableAnimatorOnDeath)
+        {
+            var anim = GetComponentInChildren<Animator>();
+            if (anim) anim.enabled = false;
+        }
+
+        if (disableNavMeshAgentOnDeath)
+        {
+            var agent = GetComponent<NavMeshAgent>();
+            if (agent) agent.enabled = false;
+        }
+
+        // notificar listeners
         try { OnDied?.Invoke(this); } catch { }
         try { OnAnyBotKilled?.Invoke(); } catch { }
 
+        // iniciar desaparecimento
         StartCoroutine(Disappear());
     }
 
     IEnumerator Disappear()
     {
-        if (delay > 0f) yield return new WaitForSeconds(delay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
 
-        if (destroyInstead) Destroy(gameObject);
-        else gameObject.SetActive(false);
+        if (destroyInstead)
+            Destroy(gameObject);
+        else
+            gameObject.SetActive(false);
     }
 }
