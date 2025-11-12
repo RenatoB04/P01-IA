@@ -7,9 +7,14 @@ namespace InfimaGames.LowPolyShooterPack
     /// <summary>
     /// Camera Look. Handles the rotation of the camera.
     /// </summary>
+    // ALTERAÇÃO: Removida herança desnecessária (já herda implicitamente de MonoBehaviour)
     public class CameraLook : MonoBehaviour
     {
         #region FIELDS SERIALIZED
+
+        [Header("Network Ref")] // ADIÇÃO
+        [Tooltip("Referência ao script Character (Controller de Rede).")]
+        public Character characterNetcode; // ADIÇÃO
         
         [Header("Settings")]
         
@@ -36,7 +41,8 @@ namespace InfimaGames.LowPolyShooterPack
         /// <summary>
         /// Player Character.
         /// </summary>
-        private CharacterBehaviour playerCharacter;
+        // ALTERAÇÃO: Agora armazena a nossa classe Character adaptada
+        private Character playerCharacter;
         /// <summary>
         /// The player character's rigidbody component.
         /// </summary>
@@ -55,22 +61,48 @@ namespace InfimaGames.LowPolyShooterPack
         
         #region UNITY
 
-        private void Awake()
+        // CORREÇÃO: Removido 'private' para 'protected' e removido 'override' (Se o original usasse)
+        protected void Awake()
         {
-            //Get Player Character.
-            playerCharacter = ServiceLocator.Current.Get<IGameModeService>().GetPlayerCharacter();
+            // ALTERAÇÃO CRUCIAL: Substitui Service Locator pela obtenção de componente
+            if (characterNetcode == null)
+            {
+                // Tenta obter o Character no objeto raiz (pai)
+                characterNetcode = GetComponentInParent<Character>(); 
+            }
+            playerCharacter = characterNetcode;
+            
+            if(playerCharacter == null)
+            {
+                Debug.LogError("CameraLook: O script 'Character' (Controller de Rede) não foi encontrado.");
+                // Retorna, mas não interrompe, para dar chance aos outros scripts (mas o código de Start/LateUpdate vai ter que lidar com isto)
+                return;
+            }
+
             //Cache the rigidbody.
             playerCharacterRigidbody = playerCharacter.GetComponent<Rigidbody>();
         }
-        private void Start()
+        
+        protected void Start()
         {
+            if (playerCharacterRigidbody == null)
+            {
+                 Debug.LogError("CameraLook: Rigidbody não encontrado no objeto principal do Player.");
+                 return;
+            }
+            
             //Cache the character's initial rotation.
             rotationCharacter = playerCharacter.transform.localRotation;
             //Cache the camera's initial rotation.
             rotationCamera = transform.localRotation;
         }
-        private void LateUpdate()
+        
+        protected void LateUpdate()
         {
+            // ADIÇÃO DE CHECK DE SEGURANÇA: Garantir que o script está ligado e é o dono
+            // O Character.cs deve desligar este script para remotos, mas esta verificação é extra
+            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner) return;
+
             //Frame Input. The Input to add this frame!
             Vector2 frameInput = playerCharacter.IsCursorLocked() ? playerCharacter.GetInputLook() : default;
             //Sensitivity.

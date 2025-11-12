@@ -5,11 +5,16 @@ using UnityEngine;
 
 namespace InfimaGames.LowPolyShooterPack
 {
+    // ALTERAÇÃO: Removida herança MovementBehaviour
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
-    public class Movement : MovementBehaviour
+    public class Movement : MonoBehaviour // Mudança para MonoBehaviour
     {
         #region FIELDS SERIALIZED
 
+        [Header("Network Ref")] // ADIÇÃO
+        [Tooltip("Referência ao script Character (Controller de Rede).")]
+        public Character characterNetcode; // ADIÇÃO
+        
         [Header("Audio Clips")]
         
         [Tooltip("The audio clip that is played while walking.")]
@@ -66,7 +71,8 @@ namespace InfimaGames.LowPolyShooterPack
         /// <summary>
         /// Player Character.
         /// </summary>
-        private CharacterBehaviour playerCharacter;
+        // ALTERAÇÃO: Agora armazena a nossa classe Character adaptada
+        private Character playerCharacter; 
         /// <summary>
         /// The player character's equipped weapon.
         /// </summary>
@@ -84,18 +90,30 @@ namespace InfimaGames.LowPolyShooterPack
         /// <summary>
         /// Awake.
         /// </summary>
-        protected override void Awake()
+        protected void Awake() // Removido 'override'
         {
-            //Get Player Character.
-            playerCharacter = ServiceLocator.Current.Get<IGameModeService>().GetPlayerCharacter();
+            // ALTERAÇÃO CRUCIAL: Substitui Service Locator pela obtenção de componente
+            if (characterNetcode == null)
+            {
+                // Tenta obter o script Character no próprio objeto (mais robusto)
+                characterNetcode = GetComponent<Character>();
+            }
+            // ALTERAÇÃO: Atribui a referência
+            playerCharacter = characterNetcode;
+            
+            if(playerCharacter == null)
+            {
+                // Deixa de ser um erro bloqueante para dar chance aos outros scripts
+                Debug.LogError("Movement: O script 'Character' (Controller de Rede) não foi encontrado.");
+            }
         }
 
         /// Initializes the FpsController on start.
-        protected override  void Start()
+        protected void Start() // Removido 'override'
         {
             //Rigidbody Setup.
             rigidBody = GetComponent<Rigidbody>();
-            rigidBody.constraints = RigidbodyConstraints.FreezeRotation;
+            if (rigidBody) rigidBody.constraints = RigidbodyConstraints.FreezeRotation;
             //Cache the CapsuleCollider.
             capsule = GetComponent<CapsuleCollider>();
 
@@ -130,9 +148,12 @@ namespace InfimaGames.LowPolyShooterPack
             //Set grounded. Now we know for sure that we're grounded.
             grounded = true;
         }
-			
-        protected override void FixedUpdate()
+          
+        protected void FixedUpdate() // Removido 'override'
         {
+            // ADIÇÃO CRUCIAL: Só move o Rigidbody se for o Owner
+            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner) return;
+            
             //Move.
             MoveCharacter();
             
@@ -141,8 +162,11 @@ namespace InfimaGames.LowPolyShooterPack
         }
 
         /// Moves the camera to the character, processes jumping and plays sounds every frame.
-        protected override  void Update()
+        protected void Update() // Removido 'override'
         {
+            // ADIÇÃO CRUCIAL: Só atualiza o som se for o Owner
+            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner) return;
+            
             //Get the equipped weapon!
             equippedWeapon = playerCharacter.GetInventory().GetEquipped();
             
@@ -159,7 +183,8 @@ namespace InfimaGames.LowPolyShooterPack
             #region Calculate Movement Velocity
 
             //Get Movement Input!
-            Vector2 frameInput = playerCharacter.GetInputMovement();
+            // ALTERAÇÃO: playerCharacter é agora a nossa classe Character adaptada
+            Vector2 frameInput = playerCharacter.GetInputMovement(); 
             //Calculate local-space direction by using the player's input.
             var movement = new Vector3(frameInput.x, 0.0f, frameInput.y);
             
@@ -187,16 +212,16 @@ namespace InfimaGames.LowPolyShooterPack
         private void PlayFootstepSounds()
         {
             //Check if we're moving on the ground. We don't need footsteps in the air.
-            if (grounded && rigidBody.linearVelocity.sqrMagnitude > 0.1f)
+            if (grounded && rigidBody != null && rigidBody.linearVelocity.sqrMagnitude > 0.1f)
             {
                 //Select the correct audio clip to play.
                 audioSource.clip = playerCharacter.IsRunning() ? audioClipRunning : audioClipWalking;
                 //Play it!
-                if (!audioSource.isPlaying)
+                if (audioSource != null && !audioSource.isPlaying)
                     audioSource.Play();
             }
             //Pause it if we're doing something like flying, or not moving!
-            else if (audioSource.isPlaying)
+            else if (audioSource != null && audioSource.isPlaying)
                 audioSource.Pause();
         }
 

@@ -18,6 +18,9 @@ namespace InfimaGames.LowPolyShooterPack.Interface
         private GameObject canvasPrefab;
 
         #endregion
+        
+        // ADIÇÃO: Campo para saber se o Canvas já foi spawnado
+        private GameObject canvas;
 
         #region UNITY FUNCTIONS
 
@@ -26,8 +29,25 @@ namespace InfimaGames.LowPolyShooterPack.Interface
         /// </summary>
         private void Awake()
         {
-            //Spawn Interface.
-            Instantiate(canvasPrefab);
+            // REMOÇÃO: Comentado para evitar que spawne para todos. A inicialização será manual.
+            // Instantiate(canvasPrefab);
+        }
+
+        #endregion
+        
+        #region PUBLIC METHODS // ADIÇÃO
+
+        /// <summary>
+        /// Instancia o Canvas, mas só se ainda não tiver sido instanciado.
+        /// </summary>
+        public void SpawnCanvas()
+        {
+            if (canvas == null)
+            {
+                //Spawn Interface.
+                canvas = Instantiate(canvasPrefab);
+                // NOTA: O kit original não define parent, assume-se que é o root da cena.
+            }
         }
 
         #endregion

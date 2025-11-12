@@ -26,6 +26,7 @@ namespace InfimaGames.LowPolyShooterPack
         
         #region METHODS
         
+        // CORREÇÃO: Usamos 'override' (o que o C# normalmente exige para implementar métodos abstract/virtual).
         public override void Init(int equippedAtStart = 0)
         {
             //Cache all weapons. Beware that weapons need to be parented to the object this component is on!
@@ -39,6 +40,7 @@ namespace InfimaGames.LowPolyShooterPack
             Equip(equippedAtStart);
         }
 
+        // CORREÇÃO: Usamos 'override'.
         public override WeaponBehaviour Equip(int index)
         {
             //If we have no weapons, we can't really equip anything.
@@ -72,6 +74,7 @@ namespace InfimaGames.LowPolyShooterPack
 
         #region Getters
 
+        // CORREÇÃO: Usamos 'override' em todos os Getters.
         public override int GetLastIndex()
         {
             //Get last index with wrap around.
@@ -83,6 +86,7 @@ namespace InfimaGames.LowPolyShooterPack
             return newIndex;
         }
 
+        // CORREÇÃO: Usamos 'override'.
         public override int GetNextIndex()
         {
             //Get next index with wrap around.
@@ -94,7 +98,9 @@ namespace InfimaGames.LowPolyShooterPack
             return newIndex;
         }
 
+        // CORREÇÃO: Usamos 'override'.
         public override WeaponBehaviour GetEquipped() => equipped;
+        // CORREÇÃO: Usamos 'override'.
         public override int GetEquippedIndex() => equippedIndex;
 
         #endregion

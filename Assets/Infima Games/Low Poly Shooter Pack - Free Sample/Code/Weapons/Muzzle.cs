@@ -25,6 +25,11 @@ namespace InfimaGames.LowPolyShooterPack
         [Tooltip("Audio clip played when firing through this muzzle.")]
         [SerializeField]
         private AudioClip audioClipFire;
+
+        [Header("Audio")]
+        [Tooltip("AudioSource usado para reproduzir o som do tiro. Idealmente colocado no mesmo objecto do muzzle/socket.")]
+        [SerializeField]
+        private AudioSource audioSource;
         
         [Header("Particles")]
         
@@ -101,6 +106,17 @@ namespace InfimaGames.LowPolyShooterPack
                 //Disable.
                 flashLight.enabled = false;
             }
+
+            // Tentar encontrar automaticamente um AudioSource se não estiver ligado no Inspector.
+            if (audioSource == null)
+            {
+                // Primeiro tenta no próprio objecto.
+                audioSource = GetComponent<AudioSource>();
+
+                // Se ainda for nulo, tenta no socket.
+                if (audioSource == null && socket != null)
+                    audioSource = socket.GetComponent<AudioSource>();
+            }
         }
 
         #endregion
@@ -109,17 +125,31 @@ namespace InfimaGames.LowPolyShooterPack
 
         public override void Effect()
         {
-            //Try to play the fire particles from the muzzle!
+            // Partículas.
             if(particles != null)
                 particles.Emit(flashParticlesCount);
 
-            //Make sure that we have a light to flash!
+            // Flash de luz.
             if (flashLight != null)
             {
-                //Enable the light.
                 flashLight.enabled = true;
-                //Disable the light after a few seconds.
                 StartCoroutine(nameof(DisableLight));
+            }
+
+            // ÁUDIO DO TIRO.
+            if (audioClipFire != null)
+            {
+                if (audioSource != null)
+                {
+                    // Som 3D no próprio muzzle.
+                    audioSource.PlayOneShot(audioClipFire);
+                }
+                else
+                {
+                    // Fallback: cria um áudio temporário na posição do socket.
+                    Vector3 pos = socket != null ? socket.position : transform.position;
+                    AudioSource.PlayClipAtPoint(audioClipFire, pos);
+                }
             }
         }
 

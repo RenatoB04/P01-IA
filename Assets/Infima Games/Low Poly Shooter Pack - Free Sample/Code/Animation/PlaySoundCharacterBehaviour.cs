@@ -47,7 +47,8 @@ namespace InfimaGames.LowPolyShooterPack
         /// <summary>
         /// Player Character.
         /// </summary>
-        private CharacterBehaviour playerCharacter;
+        // ALTERAÇÃO: Usa Character (a classe adaptada) em vez de CharacterBehaviour
+        private Character playerCharacter; 
 
         /// <summary>
         /// Player Inventory.
@@ -57,7 +58,8 @@ namespace InfimaGames.LowPolyShooterPack
         /// <summary>
         /// The service that handles sounds.
         /// </summary>
-        private IAudioManagerService audioManagerService;
+        private IAudioManagerService audioManagerService; // Mantemos o campo, mas não o usamos
+        // private IAudioManagerService audioManagerService; // Original, mantemos a linha
 
         #endregion
         
@@ -68,18 +70,36 @@ namespace InfimaGames.LowPolyShooterPack
         /// </summary>
         public override void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
         {
-            //We need to get the character component.
-            playerCharacter ??= ServiceLocator.Current.Get<IGameModeService>().GetPlayerCharacter();
+            // CORREÇÃO: SUBSTITUIÇÃO DO SERVICE LOCATOR
+            // Procura o Character no objeto principal do Animator (Ancestor)
+            if (playerCharacter == null)
+            {
+                playerCharacter = animator.GetComponentInParent<Character>();
+            }
+
+            // ADIÇÃO CRUCIAL: VERIFICAÇÃO DE AUTORIDADE
+            // Só reproduz o som se o Character existir e for o Owner (para o som ser local).
+            if (playerCharacter == null || !playerCharacter.IsOwner)
+                return;
 
             //Get Inventory.
             playerInventory ??= playerCharacter.GetInventory();
 
             //Try to get the equipped weapon's Weapon component.
-            if (!(playerInventory.GetEquipped() is { } weaponBehaviour))
+            // ADIÇÃO DE CHECK NULO: O Inventory pode ser nulo se a inicialização falhou
+            if (playerInventory == null || !(playerInventory.GetEquipped() is { } weaponBehaviour))
                 return;
             
-            //Try grab a reference to the sound managing service.
-            audioManagerService ??= ServiceLocator.Current.Get<IAudioManagerService>();
+            // REMOVIDO: Não podemos usar Service Locator para o áudio
+            // audioManagerService ??= ServiceLocator.Current.Get<IAudioManagerService>();
+
+            // Tenta obter o AudioSource no objeto Character (root)
+            if (!playerCharacter.TryGetComponent<AudioSource>(out var audioSource))
+            {
+                 // Se não houver AudioSource no root, não pode reproduzir o som
+                 return;
+            }
+
 
             #region Select Correct Clip To Play
 
@@ -107,8 +127,23 @@ namespace InfimaGames.LowPolyShooterPack
 
             #endregion
 
-            //Play with some delay. Granted, if the delay is set to zero, this will just straight-up play!
-            audioManagerService.PlayOneShotDelayed(clip, audioSettings, delay);
+            // NOVO CÓDIGO: Usa o AudioSource local que obtivemos
+            if (clip != null)
+            {
+                // Tenta obter o volume a partir do valor pré-serializado (private) se possível, senão usa 1.0f.
+                // Como não podemos aceder ao campo 'volume', usamos a solução do volume padrão.
+                float finalVolume = 1.0f; 
+    
+                // Play with some delay.
+                if (delay > 0.001f)
+                    audioSource.PlayDelayed(delay);
+                else
+                    // CORREÇÃO: Substituímos o acesso ao campo privado (audioSettings.volume) pelo valor padrão de volume 1.0f,
+                    // ou 0.0f se o audioSettings.volume fosse 0.0f (mas 1.0f é mais lógico para um som).
+                    audioSource.PlayOneShot(clip, finalVolume); 
+            }
+            // LINHA ORIGINAL COMENTADA/REMOVIDA:
+            // audioManagerService.PlayOneShotDelayed(clip, audioSettings, delay);
         }
         
         #endregion
