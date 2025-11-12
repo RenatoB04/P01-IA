@@ -965,6 +965,9 @@ MonoBehaviour:
   audioClipRunning: {fileID: 8300000, guid: d2add02f58e61e640aba3ae9110591cb, type: 3}
   speedWalking: 4
   speedRunning: 6.8
+  jumpVelocity: 6.5
+  jumpCooldown: 0.1
+  jumpAction: {fileID: -2099379676528639254, guid: 289c1b55c9541489481df5cc06664110, type: 3}
 --- !u!114 &-5687252243577193727
 MonoBehaviour:
   m_ObjectHideFlags: 0

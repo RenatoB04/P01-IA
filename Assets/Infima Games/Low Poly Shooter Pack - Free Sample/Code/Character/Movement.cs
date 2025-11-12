@@ -2,6 +2,7 @@
 
 using System.Linq;
 using UnityEngine;
+using UnityEngine.InputSystem; // <-- para o salto via Input System
 
 namespace InfimaGames.LowPolyShooterPack
 {
@@ -16,33 +17,36 @@ namespace InfimaGames.LowPolyShooterPack
         public Character characterNetcode; // ADIÇÃO
         
         [Header("Audio Clips")]
-        
         [Tooltip("The audio clip that is played while walking.")]
-        [SerializeField]
-        private AudioClip audioClipWalking;
+        [SerializeField] private AudioClip audioClipWalking;
 
         [Tooltip("The audio clip that is played while running.")]
-        [SerializeField]
-        private AudioClip audioClipRunning;
+        [SerializeField] private AudioClip audioClipRunning;
 
         [Header("Speeds")]
+        [SerializeField] private float speedWalking = 5.0f;
 
-        [SerializeField]
-        private float speedWalking = 5.0f;
+        [Tooltip("How fast the player moves while running.")]
+        [SerializeField] private float speedRunning = 9.0f;
 
-        [Tooltip("How fast the player moves while running."), SerializeField]
-        private float speedRunning = 9.0f;
+        [Header("Jump")]
+        [Tooltip("Força do salto (em unidades/segundo aplicada como mudança instantânea de velocidade).")]
+        [SerializeField] private float jumpVelocity = 5.5f;
+
+        [Tooltip("Tempo mínimo entre saltos, em segundos.")]
+        [SerializeField] private float jumpCooldown = 0.1f;
+
+        [Tooltip("Input Action do salto (por ex., bound à tecla Space).")]
+        [SerializeField] private InputActionReference jumpAction;
 
         #endregion
 
         #region PROPERTIES
 
-        //Velocity.
+        // Velocity (Unity 6 usa linearVelocity).
         private Vector3 Velocity
         {
-            //Getter.
             get => rigidBody.linearVelocity;
-            //Setter.
             set => rigidBody.linearVelocity = value;
         }
 
@@ -50,179 +54,213 @@ namespace InfimaGames.LowPolyShooterPack
 
         #region FIELDS
 
-        /// <summary>
-        /// Attached Rigidbody.
-        /// </summary>
         private Rigidbody rigidBody;
-        /// <summary>
-        /// Attached CapsuleCollider.
-        /// </summary>
         private CapsuleCollider capsule;
-        /// <summary>
-        /// Attached AudioSource.
-        /// </summary>
         private AudioSource audioSource;
-        
-        /// <summary>
-        /// True if the character is currently grounded.
-        /// </summary>
+
+        /// <summary>True se o character está no chão.</summary>
         private bool grounded;
 
-        /// <summary>
-        /// Player Character.
-        /// </summary>
-        // ALTERAÇÃO: Agora armazena a nossa classe Character adaptada
-        private Character playerCharacter; 
-        /// <summary>
-        /// The player character's equipped weapon.
-        /// </summary>
+        /// <summary>Character (controlador principal).</summary>
+        private Character playerCharacter;
+
         private WeaponBehaviour equippedWeapon;
-        
-        /// <summary>
-        /// Array of RaycastHits used for ground checking.
-        /// </summary>
+
+        /// <summary>Raycasts para ground check.</summary>
         private readonly RaycastHit[] groundHits = new RaycastHit[8];
+
+        // Controle de cooldown do salto
+        private float nextJumpTime;
 
         #endregion
 
         #region UNITY FUNCTIONS
 
-        /// <summary>
-        /// Awake.
-        /// </summary>
-        protected void Awake() // Removido 'override'
+        protected void Awake()
         {
-            // ALTERAÇÃO CRUCIAL: Substitui Service Locator pela obtenção de componente
+            // Obter Character localmente se não foi ligado no Inspector
             if (characterNetcode == null)
-            {
-                // Tenta obter o script Character no próprio objeto (mais robusto)
                 characterNetcode = GetComponent<Character>();
-            }
-            // ALTERAÇÃO: Atribui a referência
+
             playerCharacter = characterNetcode;
-            
-            if(playerCharacter == null)
-            {
-                // Deixa de ser um erro bloqueante para dar chance aos outros scripts
+
+            if (playerCharacter == null)
                 Debug.LogError("Movement: O script 'Character' (Controller de Rede) não foi encontrado.");
+
+            // Ligar evento do salto (Input System)
+            if (jumpAction != null)
+            {
+                // Garantir que a action está criada/activada
+                if (!jumpAction.action.enabled)
+                    jumpAction.action.Enable();
+
+                jumpAction.action.performed += OnJumpPerformed;
             }
         }
 
-        /// Initializes the FpsController on start.
-        protected void Start() // Removido 'override'
+        protected void OnDestroy()
         {
-            //Rigidbody Setup.
+            // Desligar evento do salto
+            if (jumpAction != null)
+                jumpAction.action.performed -= OnJumpPerformed;
+        }
+
+        protected void Start()
+        {
             rigidBody = GetComponent<Rigidbody>();
-            if (rigidBody) rigidBody.constraints = RigidbodyConstraints.FreezeRotation;
-            //Cache the CapsuleCollider.
+            if (rigidBody != null)
+            {
+                rigidBody.useGravity = true;                  // garantir gravidade do Rigidbody
+                rigidBody.constraints = RigidbodyConstraints.FreezeRotation;
+            }
+
             capsule = GetComponent<CapsuleCollider>();
 
-            //Audio Source Setup.
             audioSource = GetComponent<AudioSource>();
-            audioSource.clip = audioClipWalking;
-            audioSource.loop = true;
+            if (audioSource != null)
+            {
+                audioSource.clip = audioClipWalking;
+                audioSource.loop = true;
+            }
         }
 
-        /// Checks if the character is on the ground.
+        /// <summary>
+        /// Ground check simples por contacto (mantém grounded enquanto houver colisão abaixo).
+        /// </summary>
         private void OnCollisionStay()
         {
-            //Bounds.
+            if (capsule == null) return;
+
             Bounds bounds = capsule.bounds;
-            //Extents.
             Vector3 extents = bounds.extents;
-            //Radius.
             float radius = extents.x - 0.01f;
-            
-            //Cast. This checks whether there is indeed ground, or not.
+
+            // Cast para baixo a partir do centro do capsule
             Physics.SphereCastNonAlloc(bounds.center, radius, Vector3.down,
                 groundHits, extents.y - radius * 0.5f, ~0, QueryTriggerInteraction.Ignore);
-            
-            //We can ignore the rest if we don't have any proper hits.
-            if (!groundHits.Any(hit => hit.collider != null && hit.collider != capsule)) 
-                return;
-            
-            //Store RaycastHits.
+
+            // grounded se bater em algo que não seja o nosso próprio collider
+            if (groundHits.Any(hit => hit.collider != null && hit.collider != capsule))
+            {
+                grounded = true;
+            }
+
+            // limpar hits
             for (var i = 0; i < groundHits.Length; i++)
                 groundHits[i] = new RaycastHit();
-
-            //Set grounded. Now we know for sure that we're grounded.
-            grounded = true;
         }
-          
-        protected void FixedUpdate() // Removido 'override'
+
+        protected void FixedUpdate()
         {
-            // ADIÇÃO CRUCIAL: Só move o Rigidbody se for o Owner
-            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner) return;
-            
-            //Move.
+            // Só o owner controla o movimento
+            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
+                return;
+
             MoveCharacter();
-            
-            //Unground.
+
+            // Libertar grounded; será reposto em OnCollisionStay quando tocar no chão
             grounded = false;
+            
+            float gravityMultiplier = 2.0f; // aumenta ou diminui conforme o gosto
+            if (!grounded)
+            {
+                // aplica gravidade extra apenas enquanto está no ar
+                rigidBody.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
+            }
         }
 
-        /// Moves the camera to the character, processes jumping and plays sounds every frame.
-        protected void Update() // Removido 'override'
+        protected void Update()
         {
-            // ADIÇÃO CRUCIAL: Só atualiza o som se for o Owner
-            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner) return;
-            
-            //Get the equipped weapon!
-            equippedWeapon = playerCharacter.GetInventory().GetEquipped();
-            
-            //Play Sounds!
+            // Só o owner trata de áudio
+            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
+                return;
+
+            // HUD/sons
+            equippedWeapon = playerCharacter.GetInventory()?.GetEquipped();
+
             PlayFootstepSounds();
         }
 
         #endregion
 
-        #region METHODS
+        #region METHODS - MOVEMENT & JUMP
 
         private void MoveCharacter()
         {
-            #region Calculate Movement Velocity
+            if (playerCharacter == null || rigidBody == null) return;
 
-            //Get Movement Input!
-            // ALTERAÇÃO: playerCharacter é agora a nossa classe Character adaptada
-            Vector2 frameInput = playerCharacter.GetInputMovement(); 
-            //Calculate local-space direction by using the player's input.
+            // Input 2D (x,z) vindo do Character
+            Vector2 frameInput = playerCharacter.GetInputMovement();
             var movement = new Vector3(frameInput.x, 0.0f, frameInput.y);
-            
-            //Running speed calculation.
-            if(playerCharacter.IsRunning())
-                movement *= speedRunning;
-            else
-            {
-                //Multiply by the normal walking speed.
-                movement *= speedWalking;
-            }
 
-            //World space velocity calculation. This allows us to add it to the rigidbody's velocity properly.
+            // Velocidade (walk/run)
+            movement *= playerCharacter.IsRunning() ? speedRunning : speedWalking;
+
+            // Para o espaço do mundo, com base na orientação do player
             movement = transform.TransformDirection(movement);
 
-            #endregion
-            
-            //Update Velocity.
-            Velocity = new Vector3(movement.x, 0.0f, movement.z);
+            // PRESERVAR VELOCIDADE VERTICAL!
+            float currentY = rigidBody.linearVelocity.y;
+
+            // Aplicar velocidade de movimento só em XZ
+            Velocity = new Vector3(movement.x, currentY, movement.z);
         }
 
-        /// <summary>
-        /// Plays Footstep Sounds. This code is slightly old, so may not be great, but it functions alright-y!
-        /// </summary>
+        private void OnJumpPerformed(InputAction.CallbackContext ctx)
+        {
+            // Só processa no owner
+            if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
+                return;
+
+            TryJump();
+        }
+
+        private void TryJump()
+        {
+            if (rigidBody == null) return;
+
+            // cooldown simples
+            if (Time.time < nextJumpTime)
+                return;
+
+            // só salta se grounded
+            if (!grounded)
+                return;
+
+            // reset vertical para salto previsível
+            var v = rigidBody.linearVelocity;
+            v.y = 0f;
+            rigidBody.linearVelocity = v;
+
+            // aplicar "impulso" vertical (VelocityChange = ignora massa)
+            rigidBody.AddForce(Vector3.up * jumpVelocity, ForceMode.VelocityChange);
+
+            // marcar cooldown e sair do chão
+            nextJumpTime = Time.time + jumpCooldown;
+            grounded = false;
+        }
+
+        #endregion
+
+        #region METHODS - AUDIO
+
         private void PlayFootstepSounds()
         {
-            //Check if we're moving on the ground. We don't need footsteps in the air.
-            if (grounded && rigidBody != null && rigidBody.linearVelocity.sqrMagnitude > 0.1f)
+            if (audioSource == null || rigidBody == null || playerCharacter == null)
+                return;
+
+            // passos só quando está no chão e com velocidade horizontal
+            Vector3 horizontalVel = rigidBody.linearVelocity; horizontalVel.y = 0f;
+            if (grounded && horizontalVel.sqrMagnitude > 0.1f)
             {
-                //Select the correct audio clip to play.
                 audioSource.clip = playerCharacter.IsRunning() ? audioClipRunning : audioClipWalking;
-                //Play it!
-                if (audioSource != null && !audioSource.isPlaying)
+                if (!audioSource.isPlaying)
                     audioSource.Play();
             }
-            //Pause it if we're doing something like flying, or not moving!
-            else if (audioSource != null && audioSource.isPlaying)
+            else if (audioSource.isPlaying)
+            {
                 audioSource.Pause();
+            }
         }
 
         #endregion
