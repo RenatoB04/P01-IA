@@ -1,8 +1,13 @@
 using UnityEngine;
 using Unity.Netcode;
-using Unity.Netcode.Components; // necessário para NetworkTransform
+using Unity.Netcode.Components; // NetworkTransform
 using System;
 
+/// <summary>
+/// Gere morte e respawn do jogador.
+/// - O servidor escolhe o ponto de spawn.
+/// - O dono é teletransportado via RPC (owner authority).
+/// </summary>
 public class PlayerDeathAndRespawn : NetworkBehaviour
 {
     [Header("Refs")]
@@ -10,17 +15,17 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     [SerializeField] private CharacterController characterController;
     [SerializeField] private Health health;
 
-    [Header("Spawn Points Fixos (Mundiais)")]
-    [Tooltip("SpawnPoint A (por exemplo lado esquerdo do mapa).")]
-    [SerializeField] private Vector3 spawnPointA = new Vector3(87f, 1.5f, 115f);
+    [Header("Spawn Points Fixos (backup)")]
+    [Tooltip("SpawnPoint A (fallback se não houver SpawnPointsProvider).")]
+    [SerializeField] private Vector3 spawnPointA = new Vector3(-5f, 1.5f, 0f);
 
-    [Tooltip("SpawnPoint B (por exemplo lado direito do mapa).")]
-    [SerializeField] private Vector3 spawnPointB = new Vector3(87f, 1.5f, 175f);
+    [Tooltip("SpawnPoint B (fallback se não houver SpawnPointsProvider).")]
+    [SerializeField] private Vector3 spawnPointB = new Vector3(5f, 1.5f, 0f);
 
     [Header("Offset/Segurança")]
     [Tooltip("Offset vertical aplicado acima do ponto de spawn.")]
     [SerializeField] private float spawnUpOffset = 1.5f;
-    [Tooltip("Raycast para ajustar o spawn ao chão (recomendado).")]
+    [Tooltip("Raycast para ajustar o spawn ao chão.")]
     [SerializeField] private bool groundSnap = true;
     [SerializeField] private float groundRaycastUp = 2f;
     [SerializeField] private float groundRaycastDown = 10f;
@@ -43,21 +48,17 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
+        // Só garantimos refs aqui. O spawn INICIAL é feito
+        // por NetworkSpawnHandler → RespawnServerRpc(true).
         if (!netTransform)
             netTransform = GetComponentInChildren<NetworkTransform>();
 
-        // SPAWN INICIAL: servidor decide e **força** o dono a teletransportar via ClientRpc.
-        if (IsServer)
-        {
-            var spawn = ResolveSpawnForOwner(OwnerClientId);
-            Debug.Log($"[Respawn] OnNetworkSpawn → Spawn inicial. Owner={OwnerClientId}, SpawnPos={spawn.pos}");
-            ForceOwnerTeleportServer(spawn.pos, spawn.rot);
-        }
+        Debug.Log($"[Respawn] OnNetworkSpawn em {name}. IsServer={IsServer}, Owner={OwnerClientId}");
     }
 
     /// <summary>
-    /// RPC de respawn, usado quando o jogador morre.
-    /// Para spawn inicial forçado, usar ignoreAliveCheck = true.
+    /// Chamado pelo dono (ou por scripts de respawn) para fazer spawn/respawn.
+    /// ignoreAliveCheck = true → usado para o spawn inicial.
     /// </summary>
     [ServerRpc(RequireOwnership = false)]
     public void RespawnServerRpc(bool ignoreAliveCheck = false, ServerRpcParams rpcParams = default)
@@ -77,20 +78,18 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         }
 
         var spawn = ResolveSpawnForOwner(OwnerClientId);
-        Debug.Log($"[Respawn] Respawn/Spawn no servidor. Owner={OwnerClientId} SpawnPos={spawn.pos}");
+        Debug.Log($"[Respawn] Respawn no servidor. Owner={OwnerClientId} SpawnPos={spawn.pos}");
 
         health.ResetFullHealth();
         ForceOwnerTeleportServer(spawn.pos, spawn.rot);
     }
 
     /// <summary>
-    /// Força o dono a teletransportar-se. 
-    /// - Se o servidor tiver autoridade sobre o NetworkTransform, também teleporta no servidor (para consistência).
-    /// - **Mas em qualquer caso** envia um ClientRpc dirigido ao dono (Owner) para garantir o movimento.
+    /// No servidor: tenta teletransportar, depois manda RPC para o dono.
     /// </summary>
     private void ForceOwnerTeleportServer(Vector3 spawnPos, Quaternion spawnRot)
     {
-        // 1) Se o servidor puder “commit” (server authority), teleporta também no servidor.
+        // 1) Se o servidor tiver autoridade sobre o NetworkTransform, teleporta também aqui.
         try
         {
             if (netTransform != null && netTransform.CanCommitToTransform)
@@ -98,17 +97,13 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
                 Vector3 scale = transform.localScale;
                 netTransform.Teleport(spawnPos, spawnRot, scale);
             }
-            else
-            {
-                // Mesmo sem autoridade, não há problema — o passo 2 vai resolver no Owner.
-            }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[Respawn] Server-side Teleport falhou/sem autoridade: {ex.Message}. A prosseguir com RPC ao Owner.");
+            Debug.LogWarning($"[Respawn] Server-side Teleport falhou/sem autoridade: {ex.Message}");
         }
 
-        // 2) **Sempre** enviar RPC dirigido ao Owner, que tem autoridade e pode aplicar a pose.
+        // 2) Diz ao dono para se teletransportar localmente (authority do owner).
         var target = new ClientRpcParams
         {
             Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
@@ -128,7 +123,6 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         {
             if (netTransform != null)
             {
-                // No Owner, a autoridade é local — este Teleport *vai* aplicar.
                 netTransform.Teleport(pos, rot, scale);
             }
             else
@@ -139,33 +133,75 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[Respawn] Owner Teleport falhou: {ex.Message}. Fallback transform.SetPositionAndRotation.");
+            Debug.LogError($"[Respawn] Owner Teleport falhou: {ex.Message}. Fallback transform.");
             transform.SetPositionAndRotation(pos, rot);
             transform.localScale = scale;
         }
 
+        // Volta a trancar o cursor no respawn.
         GameplayCursor.Lock();
 
         if (ccWasEnabled) characterController.enabled = true;
     }
 
-    // ===================== LÓGICA DE RESOLUÇÃO DE SPAWN =====================
+    // =====================================================================
+    // LÓGICA DE ESCOLHA DE SPAWN
+    // =====================================================================
 
     private Pose ResolveSpawnForOwner(ulong ownerClientId)
     {
-        // Fallback simples e determinístico A/B (sem dependências externas).
+        // 1) Se houver SpawnPointsProvider na cena, usamos isso.
+        var provider = SpawnPointsProvider.Instance;
+
+        if (provider != null)
+        {
+            bool useA = (ownerClientId % 2UL == 0UL);
+            Vector3 basePos;
+            Quaternion baseRot;
+            bool ok = useA
+                ? provider.TryGetSpawnA(out basePos, out baseRot)
+                : provider.TryGetSpawnB(out basePos, out baseRot);
+
+            // Se o spawn escolhido falhar, tenta o outro.
+            if (!ok)
+            {
+                bool otherOk = !useA
+                    ? provider.TryGetSpawnA(out basePos, out baseRot)
+                    : provider.TryGetSpawnB(out basePos, out baseRot);
+
+                if (!otherOk)
+                {
+                    // Falhou tudo → passa para fallback de Vector3.
+                    Debug.LogWarning("[Respawn] SpawnPointsProvider não devolveu posição válida. A usar fallback.");
+                    return ResolveFallbackSpawn(ownerClientId);
+                }
+            }
+
+            var finalFromProvider = FinalizePose(basePos, baseRot);
+            Debug.Log($"[Respawn] ResolveSpawn (Provider) Owner={ownerClientId}, useA={useA}, finalPos={finalFromProvider.pos}");
+            return finalFromProvider;
+        }
+
+        // 2) Caso não haja provider, usa os Vector3 configurados no inspector.
+        return ResolveFallbackSpawn(ownerClientId);
+    }
+
+    private Pose ResolveFallbackSpawn(ulong ownerClientId)
+    {
+        bool useA = (ownerClientId % 2UL == 0UL);
+
+        // Se por acaso estiverem a zero absolutos, mete uns valores minimamente decentes.
         if (spawnPointA == Vector3.zero && spawnPointB == Vector3.zero)
         {
             spawnPointA = new Vector3(-5f, spawnUpOffset, 0f);
             spawnPointB = new Vector3(5f, spawnUpOffset, 0f);
         }
 
-        bool useA = (ownerClientId % 2UL == 0UL);
         var basePos = useA ? spawnPointA : spawnPointB;
         var rot = Quaternion.identity;
 
         var final = FinalizePose(basePos, rot);
-        Debug.Log($"[Respawn] ResolveSpawn → Owner={ownerClientId}, useA={useA}, basePos={basePos}, finalPos={final.pos}");
+        Debug.Log($"[Respawn] ResolveFallbackSpawn Owner={ownerClientId}, useA={useA}, basePos={basePos}, finalPos={final.pos}");
         return final;
     }
 
@@ -181,6 +217,7 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         if (!groundSnap) return;
 
         Vector3 origin = pos + Vector3.up * Mathf.Max(0.01f, groundRaycastUp);
+
         if (Physics.Raycast(origin, Vector3.down, out var hit,
                 Mathf.Max(groundRaycastDown, spawnUpOffset + 2f),
                 ~0, QueryTriggerInteraction.Ignore))

@@ -32,7 +32,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [SerializeField] Button btnPlayBots;             // 👉 NOVO botão "Jogar com Bots"
 
     [Header("Config")]
-    [SerializeField] string gameSceneName = "GameScene";
+    [SerializeField] string gameSceneName = "Prototype";
     [SerializeField] int roomCodeLength = 6;
     [SerializeField] int maxPlayers = 2;
     [SerializeField] int countdownSeconds = 3;

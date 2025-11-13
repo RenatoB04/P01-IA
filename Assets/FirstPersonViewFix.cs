@@ -1,11 +1,15 @@
 using UnityEngine;
 using Unity.Netcode;
+using System.Collections; // Adicionado para a Coroutine
 
 public class FirstPersonViewFix : NetworkBehaviour
 {
     [Header("Refs")]
     [Tooltip("Root dos braços/arma de 1.ª pessoa (viewmodel).")]
     public GameObject firstPersonRoot;
+
+    [Tooltip("O modelo de 3ª pessoa (ex: BlueSoldier_Male).")]
+    public GameObject thirdPersonModel;
 
     [Tooltip("Câmara principal do jogador (Main Camera).")]
     public Camera mainCamera;
@@ -18,73 +22,94 @@ public class FirstPersonViewFix : NetworkBehaviour
     public string firstPersonLayerName = "FirstPerson";
 
     [Header("Áudio (opcional)")]
-    public AudioListener audioListener; // activo só no owner
+    public AudioListener audioListener;
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
-        // Autodetects básicos
         if (mainCamera == null) mainCamera = GetComponentInChildren<Camera>(true);
         if (audioListener == null) audioListener = GetComponentInChildren<AudioListener>(true);
 
-        // Câmaras só no owner
-        if (mainCamera) mainCamera.enabled = IsOwner;
-        if (weaponCamera) weaponCamera.enabled = IsOwner;
-        if (audioListener) audioListener.enabled = IsOwner;
+        // --- CORREÇÃO DO BUG DE SPAWN (Race Condition) ---
+        // Espera 0.5 segundos para garantir que o PlayerDeathAndRespawn corre primeiro.
+        StartCoroutine(SetupVisibility());
+    }
 
-        // Se não é o dono, não precisamos de mais nada.
-        if (!IsOwner) return;
+    private IEnumerator SetupVisibility()
+    {
+        // --- CORREÇÃO DO BUG DE SPAWN ---
+        // Espera meio segundo
+        yield return new WaitForSeconds(0.5f);
+        // --- FIM DA CORREÇÃO ---
 
-        // Se não houver viewmodel root, não há o que separar.
-        if (firstPersonRoot == null || mainCamera == null)
+
+        // --- LÓGICA DE VISIBILIDADE ---
+        if (IsOwner)
         {
-            Debug.LogWarning("[FirstPersonViewFix] Faltam refs (firstPersonRoot/mainCamera).");
-            return;
-        }
+            // É O MEU JOGADOR
+            if (mainCamera) mainCamera.enabled = true;
+            if (weaponCamera) weaponCamera.enabled = true;
+            if (audioListener) audioListener.enabled = true;
 
-        // Tenta obter a layer
-        int fpLayer = LayerMask.NameToLayer(firstPersonLayerName);
-        if (fpLayer < 0)
-        {
-            Debug.LogWarning($"[FirstPersonViewFix] A layer '{firstPersonLayerName}' não existe. " +
-                             "Cria-a em Project Settings → Tags and Layers. " +
-                             "Vou continuar sem mexer em layers (pode continuar duplicado se tiveres duas câmaras).");
+            if (firstPersonRoot) firstPersonRoot.SetActive(true);
+            if (thirdPersonModel) thirdPersonModel.SetActive(false);
         }
         else
         {
-            // Mete os braços/arma todos na layer seleccionada
+            // É UM JOGADOR REMOTO
+            if (mainCamera) mainCamera.enabled = false;
+            if (weaponCamera) weaponCamera.enabled = false;
+            if (audioListener) audioListener.enabled = false;
+
+            if (firstPersonRoot) firstPersonRoot.SetActive(false);
+            if (thirdPersonModel) thirdPersonModel.SetActive(true);
+        }
+        // --- FIM DA LÓGICA ---
+
+        if (!IsOwner) yield break;
+
+        // --- LÓGICA DAS LAYERS (só corre para o Owner) ---
+
+        if (firstPersonRoot == null || mainCamera == null)
+        {
+            yield break;
+        }
+
+        int fpLayer = LayerMask.NameToLayer(firstPersonLayerName);
+        if (fpLayer < 0)
+        {
+            Debug.LogWarning($"[FirstPersonViewFix] A layer '{firstPersonLayerName}' não existe.");
+        }
+        else
+        {
             SetLayerRecursively(firstPersonRoot, fpLayer);
         }
 
-        // Se existe Weapon Camera, configuramos TWO-CAM setup
         if (weaponCamera != null && fpLayer >= 0)
         {
-            // Main Camera exclui a layer FirstPerson
             int maskMain = mainCamera.cullingMask;
             maskMain &= ~(1 << fpLayer);
             mainCamera.cullingMask = maskMain;
 
-            // Weapon Camera só desenha FirstPerson
             weaponCamera.cullingMask = (1 << fpLayer);
-            weaponCamera.clearFlags = CameraClearFlags.Depth; // DepthOnly
+            weaponCamera.clearFlags = CameraClearFlags.Depth;
             weaponCamera.depth = Mathf.Max(mainCamera.depth + 1f, mainCamera.depth + 1f);
 
-            // Nunca ter dois AudioListeners
             var wl = weaponCamera.GetComponent<AudioListener>();
             if (wl) wl.enabled = false;
 
-            // Planos e FOV seguros (opcional)
             weaponCamera.nearClipPlane = 0.01f;
             weaponCamera.farClipPlane = 500f;
-
-            Debug.Log("[FirstPersonViewFix] Configuração TWO-CAM aplicada (Main exclui FirstPerson; WeaponCamera só FirstPerson).");
         }
         else
         {
-            // Single camera setup: não excluir a layer para os braços aparecerem
-            // (Se tinhas algum hack a pôr ~0, não há problema; aqui não mexemos.)
-            Debug.Log("[FirstPersonViewFix] Configuração SINGLE-CAM (sem WeaponCamera).");
+            if (fpLayer >= 0)
+            {
+                int maskMain = mainCamera.cullingMask;
+                maskMain &= ~(1 << fpLayer);
+                mainCamera.cullingMask = maskMain;
+            }
         }
     }
 
