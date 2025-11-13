@@ -777,6 +777,7 @@ GameObject:
   - component: {fileID: -195160739095084917}
   - component: {fileID: -7511104848531135329}
   - component: {fileID: 1327982029724605058}
+  - component: {fileID: 3606108398017432918}
   m_Layer: 10
   m_Name: FPSPlayer
   m_TagString: Player
@@ -980,7 +981,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2824729780
+  GlobalObjectIdHash: 2250448752
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -1512,6 +1513,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponController
   ShowTopMostFoldoutHeaderGroup: 1
   bulletPrefab: {fileID: 1086664671600574, guid: 5953171a59c27394e9ad5cbb564affa8, type: 3}
+--- !u!114 &3606108398017432918
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2751027687307977091}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1095e766226077249a39d9e1eb17338c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSpawnFixer
+  ShowTopMostFoldoutHeaderGroup: 1
+  enableFix: 1
+  minAcceptY: -1
+  fallbackY: 1.5
+  attempts: 6
+  initialDelay: 0.03
 --- !u!1 &2906013363015915789
 GameObject:
   m_ObjectHideFlags: 0
