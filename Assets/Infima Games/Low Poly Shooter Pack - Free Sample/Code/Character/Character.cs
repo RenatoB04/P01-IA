@@ -19,27 +19,26 @@ namespace InfimaGames.LowPolyShooterPack
        #region FIELDS SERIALIZED
 
        [Header("Network (Ligar no Inspector)")] // ADIÇÃO
-       [Tooltip("A câmara do jogador (para ativar/desativar).")]
+       [Tooltip("A câmara principal do jogador (para ativar/desativar).")]
        [SerializeField] private Camera playerCamera;
-       [Tooltip("O AudioListener (para ativar/desativar).")]
+       
+       [Tooltip("O AudioListener principal (para ativar/desativar).")]
        [SerializeField] private AudioListener audioListener;
+       
        [Tooltip("O script Kinematics (para ativar/desativar).")]
        [SerializeField] private CharacterKinematics characterKinematicsScript;
 
        [Header("Inventory")]
-       
        [Tooltip("Inventory.")]
        [SerializeField]
        private InventoryBehaviour inventory;
 
        [Header("Cameras")]
-
        [Tooltip("Normal Camera.")]
        [SerializeField]
        private Camera cameraWorld;
 
        [Header("Animation")]
-
        [Tooltip("Determines how smooth the locomotion blendspace é.")]
        [SerializeField]
        private float dampTimeLocomotion = 0.15f;
@@ -49,7 +48,6 @@ namespace InfimaGames.LowPolyShooterPack
        private float dampTimeAiming = 0.3f;
        
        [Header("Animation Procedural")]
-       
        [Tooltip("Character Animator.")]
        [SerializeField]
        private Animator characterAnimator;
@@ -164,6 +162,11 @@ namespace InfimaGames.LowPolyShooterPack
        /// </summary>
        private bool cursorLocked;
 
+       // NOVO: arrays com TODAS as câmaras e listeners encontradas no prefab.
+       private Camera[] allCameras;
+       private AudioListener[] allAudioListeners;
+       private PlayerInput cachedPlayerInput;
+
        #endregion
 
        #region CONSTANTS
@@ -187,38 +190,68 @@ namespace InfimaGames.LowPolyShooterPack
        {
            base.OnNetworkSpawn();
            
+           // Tentar obter refs principais se não tiverem sido ligadas
            if (!playerCamera) playerCamera = GetComponentInChildren<Camera>(true);
            if (!audioListener) audioListener = GetComponentInChildren<AudioListener>(true);
            if (!characterKinematicsScript) characterKinematicsScript = GetComponent<CharacterKinematics>();
+           if (!weaponAudioSource) weaponAudioSource = GetComponentInChildren<AudioSource>(true);
+
+           // Preencher arrays com TODAS as câmaras/listeners do prefab
+           allCameras = GetComponentsInChildren<Camera>(true);
+           allAudioListeners = GetComponentsInChildren<AudioListener>(true);
+
+           if (cachedPlayerInput == null)
+               cachedPlayerInput = GetComponent<PlayerInput>();
 
            bool owner = IsOwner;
            
-           // Desativa componentes visuais e input para jogadores remotos
-           if (playerCamera) playerCamera.enabled = owner;
-           
-           if (playerCamera)
+           // Desativar/ativar TODAS as câmaras deste jogador, consoante seja dono ou não
+           if (allCameras != null)
+           {
+               foreach (var cam in allCameras)
+               {
+                   if (cam != null)
+                       cam.enabled = owner;
+               }
+           }
+
+           // Ainda assim, manter compatibilidade com os campos antigos.
+           if (playerCamera != null)
            {
               playerCamera.enabled = owner;
 
               if (owner)
               {
-                 // Renderiza tudo para eliminar máscaras marotas.
-                 // playerCamera.cullingMask = ~0; // Everything
+                 // Ajustes básicos seguros de câmera do owner.
                  playerCamera.nearClipPlane = 0.03f;
                  playerCamera.farClipPlane = 2000f;
-                 playerCamera.clearFlags = CameraClearFlags.Skybox; // ou SolidColor, como preferires
-
-                 Debug.Log($"[CameraFix] CullingMask={playerCamera.cullingMask}, Near={playerCamera.nearClipPlane}, Far={playerCamera.farClipPlane}");
+                 // Não tocamos no culling mask aqui para não estragar o setup visual.
               }
            }
-           
+
+           // Desativar/ativar TODOS os AudioListeners deste jogador
+           if (allAudioListeners != null)
+           {
+               foreach (var al in allAudioListeners)
+               {
+                   if (al != null)
+                       al.enabled = owner;
+               }
+           }
+
+           // Compat: listener principal
            if (audioListener) audioListener.enabled = owner;
+
+           // IK apenas no dono
            if (characterKinematicsScript) characterKinematicsScript.enabled = owner;
            
            // Desativa o PlayerInput se não for o dono
-           if (GetComponent<PlayerInput>() is PlayerInput pi) pi.enabled = owner;
+           if (cachedPlayerInput != null)
+               cachedPlayerInput.enabled = owner;
+           else if (GetComponent<PlayerInput>() is PlayerInput pi)
+               pi.enabled = owner;
 
-           // GESTÃO DO CURSOR
+           // GESTÃO DO CURSOR + inventário + spawn apenas no owner
            if (owner)
            {
                cursorLocked = true;
@@ -227,10 +260,11 @@ namespace InfimaGames.LowPolyShooterPack
                // ACIONAR O SPAWN (Chamamos o script responsável pela posição)
                if (TryGetComponent<NetworkSpawnHandler>(out var spawnHandler))
                {
+                   // Não é ideal chamar manualmente, mas mantemos porque já o tinhas assim.
                    spawnHandler.OnNetworkSpawn(); 
                }
                
-               // CORREÇÃO DA ARMA: Inicializa o inventário APÓS o spawn da rede
+               // Inicializa inventário APÓS o spawn da rede
                if(inventory != null) inventory.Init(); 
                if(inventory != null) RefreshWeaponSetup();
            }
@@ -266,6 +300,11 @@ namespace InfimaGames.LowPolyShooterPack
           // Tenta obter automaticamente um AudioSource para sons da arma se não estiver ligado no Inspector
           if (weaponAudioSource == null)
               weaponAudioSource = GetComponentInChildren<AudioSource>(true);
+
+          // Cache de todas as câmaras/listeners e input
+          allCameras = GetComponentsInChildren<Camera>(true);
+          allAudioListeners = GetComponentsInChildren<AudioListener>(true);
+          cachedPlayerInput = GetComponent<PlayerInput>();
 
           #region Lock Cursor
           cursorLocked = true;
@@ -1014,7 +1053,7 @@ namespace InfimaGames.LowPolyShooterPack
        }
 
        #endregion
-       // O #endregion para fechar a classe está no final
+       // (fim da classe)
     }
     #endregion
 }
