@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 
@@ -11,6 +13,7 @@ public class BulletProjectile : NetworkBehaviour
     public float lifeTime = 5f;
 
     [Header("Filtro (opcional)")]
+    [Tooltip("Layers que o projéctil pode atingir. Por defeito: todas (~0).")]
     public LayerMask hittableLayers = ~0;
 
     [HideInInspector] public int   ownerTeam     = -1;
@@ -30,8 +33,6 @@ public class BulletProjectile : NetworkBehaviour
         if (rb)
         {
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            // Mantém interpolation à tua escolha; a simulação será local também
-            // rb.interpolation = RigidbodyInterpolation.Interpolate;
         }
         var col = GetComponent<Collider>();
         if (col) col.enabled = true;
@@ -41,7 +42,6 @@ public class BulletProjectile : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
-        // Aplica a velocity inicial no lado do cliente para evitar projéctil parado
         if (!IsServer && rb != null)
         {
             if (initialVelocity.Value != Vector3.zero)
@@ -65,12 +65,23 @@ public class BulletProjectile : NetworkBehaviour
         if (!IsServer) return;
         if (hasHit) return;
 
-        // Ignora colisão com o próprio atirador
-        if (ownerRoot && c.transform.root == ownerRoot) return;
-        var otherRootNO = c.transform.root.GetComponent<NetworkObject>();
-        if (ownerClientId != ulong.MaxValue && otherRootNO && otherRootNO.OwnerClientId == ownerClientId) return;
+        // Evita aplicar ao próprio atirador: compara a raiz transform (mais estrito que OwnerClientId)
+        if (ownerRoot && c.transform.root == ownerRoot)
+        {
+            Debug.Log($"[Bullet] Ignorado (collision): colisão com ownerRoot ({ownerRoot.name}). collider={c.collider.name}");
+            return;
+        }
 
-        if (((1 << c.gameObject.layer) & hittableLayers) == 0) { ServerCleanup(); return; }
+        // NOTA: não usamos a verificação ownerClientId para ignorar hits,
+        // porque em offline/host os bots podem partilhar OwnerClientId com o jogador
+        // e isso causava falsos positivos. A verificação por ownerRoot é suficiente.
+
+        if (((1 << c.gameObject.layer) & hittableLayers) == 0)
+        {
+            Debug.Log($"[Bullet] Ignorado (collision): layer {c.gameObject.layer} não está em hittableLayers.");
+            ServerCleanup();
+            return;
+        }
 
         Vector3 hitPos = transform.position;
         if (c.contactCount > 0) hitPos = c.GetContact(0).point;
@@ -82,12 +93,21 @@ public class BulletProjectile : NetworkBehaviour
         if (!IsServer) return;
         if (hasHit) return;
 
-        // Ignora colisão com o próprio atirador
-        if (ownerRoot && other.transform.root == ownerRoot) return;
-        var otherRootNO = other.transform.root.GetComponent<NetworkObject>();
-        if (ownerClientId != ulong.MaxValue && otherRootNO && otherRootNO.OwnerClientId == ownerClientId) return;
+        // Evita aplicar ao próprio atirador: compara a raiz transform (mais estrito que OwnerClientId)
+        if (ownerRoot && other.transform.root == ownerRoot)
+        {
+            Debug.Log($"[Bullet] Ignorado (trigger): colisão com ownerRoot ({ownerRoot.name}). collider={other.name}");
+            return;
+        }
 
-        if (((1 << other.gameObject.layer) & hittableLayers) == 0) { ServerCleanup(); return; }
+        // NOTA: não usamos a verificação ownerClientId para ignorar hits por causa de falsos positivos offline.
+
+        if (((1 << other.gameObject.layer) & hittableLayers) == 0)
+        {
+            Debug.Log($"[Bullet] Ignorado (trigger): layer {other.gameObject.layer} não está em hittableLayers.");
+            ServerCleanup();
+            return;
+        }
 
         ProcessHitServer(other, transform.position);
     }
@@ -97,24 +117,98 @@ public class BulletProjectile : NetworkBehaviour
         if (hasHit) return;
         hasHit = true;
 
-        var h = col.GetComponentInParent<Health>();
-        if (h != null)
-        {
-            // Aplica dano directamente no servidor
-            h.ApplyDamageServer(damage, ownerTeam, ownerClientId, hitPos, true);
+        Debug.Log($"[Bullet] ProcessHitServer: collider={col.name}, root={col.transform.root.name}, layer={col.gameObject.layer}, ownerClientId={ownerClientId}, ownerTeam={ownerTeam}, ownerRoot={(ownerRoot? ownerRoot.name : "null")}");
 
-            // Hitmarker apenas para o atirador (ClientRpc dirigido)
-            if (ownerClientId != ulong.MaxValue)
+        // 1) Tenta obter Health no parent chain do collider (alvo direto)
+        var targetHealth = col.GetComponentInParent<Health>();
+
+        // 2) Se não encontrou, tenta GetComponentInChildren no root (caso Health esteja em filho)
+        if (targetHealth == null)
+        {
+            var root = col.transform.root;
+            targetHealth = root.GetComponentInChildren<Health>(true);
+            if (targetHealth != null)
             {
-                var target = new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams { TargetClientIds = new[] { ownerClientId } }
-                };
-                HitmarkerClientRpc((float)damage, h.name, target);
+                Debug.Log($"[Bullet] Health encontrado via GetComponentInChildren no root '{root.name}' -> health on '{targetHealth.name}'.");
             }
         }
 
+        // 3) Se ainda não encontrou, tenta um OverlapSphere pequeno como fallback
+        if (targetHealth == null)
+        {
+            Collider[] nearby = Physics.OverlapSphere(hitPos, 0.25f, hittableLayers, QueryTriggerInteraction.Ignore);
+            Debug.Log($"[Bullet] OverlapSphere fallback: encontrou {nearby.Length} colliders próximos.");
+            foreach (var nc in nearby)
+            {
+                var hh = nc.GetComponentInParent<Health>() ?? nc.GetComponentInChildren<Health>(true);
+                if (hh != null)
+                {
+                    // Preferir Health cujo root seja o do collider (o alvo directo)
+                    if (nc.transform.root == col.transform.root)
+                    {
+                        targetHealth = hh;
+                        Debug.Log($"[Bullet] Escolhido Health preferencial (mesmo root) = {hh.name} (via collider {nc.name}).");
+                        break;
+                    }
+                    // caso contrário, guarda primeiro candidato
+                    if (targetHealth == null)
+                    {
+                        targetHealth = hh;
+                        Debug.Log($"[Bullet] Candidate Health (via OverlapSphere) = {hh.name} (collider {nc.name}).");
+                    }
+                }
+            }
+        }
+
+        if (targetHealth == null)
+        {
+            Debug.Log($"[Bullet] No Health found on collided object {col.name} (root={col.transform.root.name}). Não apliquei dano.");
+            ServerCleanup();
+            return;
+        }
+
+        // Aplica dano com checagens de segurança (owner/friendly)
+        bool applied = TryApplyDamageTo(targetHealth, hitPos);
+        if (!applied)
+        {
+            Debug.Log($"[Bullet] Dano NÃO aplicado a {targetHealth.name}. Razão nos logs acima.");
+        }
+
         ServerCleanup();
+    }
+
+    private bool TryApplyDamageTo(Health h, Vector3 hitPos)
+    {
+        if (h == null) return false;
+
+        // Evita aplicar ao próprio atirador comparando a raiz (root) do alvo com o ownerRoot
+        if (ownerRoot != null && h.transform.root == ownerRoot)
+        {
+            Debug.Log($"[Bullet] ApplyDamage skipped: target root == ownerRoot ({ownerRoot.name})");
+            return false;
+        }
+
+        // Friendly fire check: (Health.ApplyDamageServer também faz isto, mas logamos aqui para diagnóstico)
+        int targetTeam = h != null ? h.team.Value : -1;
+        int instigatorTeam = ownerTeam;
+        if (targetTeam != -1 && instigatorTeam != -1 && targetTeam == instigatorTeam)
+        {
+            Debug.Log($"[Bullet] ApplyDamage skipped por Friendly Fire: targetTeam={targetTeam}, instigatorTeam={instigatorTeam}");
+            return false;
+        }
+
+        // Tenta aplicar dano no servidor com try/catch para logs mais claros
+        try
+        {
+            h.ApplyDamageServer(damage, instigatorTeam, ownerClientId, hitPos, true);
+            Debug.Log($"[Bullet] Applied {damage} to {h.name} (team target={h.team.Value}, team owner={instigatorTeam}, ownerClientId={ownerClientId})");
+            return true;
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[Bullet] Exception applying damage to {h.name}: {ex}");
+            return false;
+        }
     }
 
     [ClientRpc]

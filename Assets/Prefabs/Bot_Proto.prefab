@@ -48,6 +48,7 @@ GameObject:
   - component: {fileID: 6580659386542663713}
   - component: {fileID: 5528176311267628620}
   - component: {fileID: -5785216237079057797}
+  - component: {fileID: -9100149406634143210}
   m_Layer: 8
   m_Name: Bot_Proto
   m_TagString: Untagged
@@ -222,7 +223,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2941842399
+  GlobalObjectIdHash: 4239734636
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -281,6 +282,19 @@ MonoBehaviour:
   disableColliderOnDeath: 1
   disableAnimatorOnDeath: 1
   disableNavMeshAgentOnDeath: 1
+--- !u!114 &-9100149406634143210
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7703748112432588966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c43a6b35d1a7cce4caf7781c2827abe9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BotDiagnostics
+  verbose: 1
 --- !u!1 &8642664510083840097
 GameObject:
   m_ObjectHideFlags: 0
