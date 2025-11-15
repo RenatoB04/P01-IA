@@ -18,6 +18,13 @@ namespace InfimaGames.LowPolyShooterPack
     {
        #region FIELDS SERIALIZED
 
+       [Header("Visibility")]
+       [Tooltip("Renderers que só o dono deve ver (braços FP, arma FP).")]
+       [SerializeField] private Renderer[] firstPersonOnlyRenderers;
+       
+       [Tooltip("Renderers que só os outros devem ver (modelo TPS).")]
+       [SerializeField] private Renderer[] thirdPersonOnlyRenderers;
+       
        [Header("Network (Ligar no Inspector)")] // ADIÇÃO
        [Tooltip("A câmara principal do jogador (para ativar/desativar).")]
        [SerializeField] private Camera playerCamera;
@@ -55,6 +62,7 @@ namespace InfimaGames.LowPolyShooterPack
        [Header("Audio")]
        [Tooltip("AudioSource para sons da arma (reload, etc).")]
        [SerializeField]
+       
        private AudioSource weaponAudioSource;
 
        #endregion
@@ -204,6 +212,9 @@ namespace InfimaGames.LowPolyShooterPack
                cachedPlayerInput = GetComponent<PlayerInput>();
 
            bool owner = IsOwner;
+           
+           SetRenderersEnabled(firstPersonOnlyRenderers, owner);
+           SetRenderersEnabled(thirdPersonOnlyRenderers, !owner);
            
            // Desativar/ativar TODAS as câmaras deste jogador, consoante seja dono ou não
            if (allCameras != null)
@@ -1009,6 +1020,16 @@ namespace InfimaGames.LowPolyShooterPack
              //Default.
              _ => tutorialTextVisible
           };
+       }
+       
+       private void SetRenderersEnabled(Renderer[] renderers, bool enabled)
+       {
+           if (renderers == null) return;
+           foreach (var r in renderers)
+           {
+               if (r != null)
+                   r.enabled = enabled;
+           }
        }
 
        #endregion
