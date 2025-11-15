@@ -10,13 +10,12 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     [SerializeField] private CharacterController characterController;
     [SerializeField] private Health health;
 
-    [Header("Spawns")]
-    [Tooltip("Opcional. Se vazio, é encontrado automaticamente (SpawnsManager.I ou FindObjectOfType).")]
-    [SerializeField] private SpawnsManager spawnsManager;
-    [Tooltip("Modo de seleção do ponto de spawn.")]
-    [SerializeField] private SelectionMode selectionMode = SelectionMode.Random;
-    [Tooltip("Usar rotação do ponto de spawn (se falso, usa Quaternion.identity).")]
-    [SerializeField] private bool useSpawnRotation = true;
+    [Header("Spawn Points Fixos (Mundiais)")]
+    [Tooltip("SpawnPoint A (por exemplo lado esquerdo do mapa).")]
+    [SerializeField] private Vector3 spawnPointA = new Vector3(87f, 1.5f, 115f);
+
+    [Tooltip("SpawnPoint B (por exemplo lado direito do mapa).")]
+    [SerializeField] private Vector3 spawnPointB = new Vector3(87f, 1.5f, 175f);
 
     [Header("Offset/Segurança")]
     [Tooltip("Offset vertical aplicado acima do ponto de spawn.")]
@@ -26,16 +25,14 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     [SerializeField] private float groundRaycastUp = 2f;
     [SerializeField] private float groundRaycastDown = 10f;
 
-    private static int s_roundRobinIndex = 0;
-
-    public enum SelectionMode
+    private struct Pose
     {
-        Random,
-        RoundRobin, // usa SpawnsManager.GetNext()
-        ByClientId  // determinístico: OwnerClientId % count
+        public Vector3 pos;
+        public Quaternion rot;
+        public Pose(Vector3 p, Quaternion r) { pos = p; rot = r; }
     }
 
-    void Awake()
+    private void Awake()
     {
         if (!netTransform) netTransform = GetComponentInChildren<NetworkTransform>();
         if (!characterController) characterController = GetComponentInChildren<CharacterController>();
@@ -45,13 +42,25 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        if (!netTransform) netTransform = GetComponentInChildren<NetworkTransform>();
-        if (!spawnsManager)
-            spawnsManager = SpawnsManager.I ? SpawnsManager.I : FindObjectOfType<SpawnsManager>();
+
+        if (!netTransform)
+            netTransform = GetComponentInChildren<NetworkTransform>();
+
+        // SPAWN INICIAL: servidor decide e **força** o dono a teletransportar via ClientRpc.
+        if (IsServer)
+        {
+            var spawn = ResolveSpawnForOwner(OwnerClientId);
+            Debug.Log($"[Respawn] OnNetworkSpawn → Spawn inicial. Owner={OwnerClientId}, SpawnPos={spawn.pos}");
+            ForceOwnerTeleportServer(spawn.pos, spawn.rot);
+        }
     }
 
+    /// <summary>
+    /// RPC de respawn, usado quando o jogador morre.
+    /// Para spawn inicial forçado, usar ignoreAliveCheck = true.
+    /// </summary>
     [ServerRpc(RequireOwnership = false)]
-    public void RespawnServerRpc(ServerRpcParams rpcParams = default)
+    public void RespawnServerRpc(bool ignoreAliveCheck = false, ServerRpcParams rpcParams = default)
     {
         if (!IsServer) return;
 
@@ -61,65 +70,50 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
             return;
         }
 
-        if (!health.isDead.Value)
+        if (!ignoreAliveCheck && !health.isDead.Value)
         {
             Debug.LogWarning("[Respawn] Ignorado: jogador não está morto.");
             return;
         }
 
-        GetSpawnPose(out Vector3 spawnPos, out Quaternion spawnRot);
+        var spawn = ResolveSpawnForOwner(OwnerClientId);
+        Debug.Log($"[Respawn] Respawn/Spawn no servidor. Owner={OwnerClientId} SpawnPos={spawn.pos}");
 
-        Debug.Log($"[Respawn] Iniciando respawn no servidor. SpawnPos={spawnPos}");
-
-        health.ResetFullHealth(); // server -> direto
-        ServerTeleport(spawnPos, spawnRot);
+        health.ResetFullHealth();
+        ForceOwnerTeleportServer(spawn.pos, spawn.rot);
     }
 
-    public void ServerTeleport(Vector3 spawnPos, Quaternion spawnRot)
+    /// <summary>
+    /// Força o dono a teletransportar-se. 
+    /// - Se o servidor tiver autoridade sobre o NetworkTransform, também teleporta no servidor (para consistência).
+    /// - **Mas em qualquer caso** envia um ClientRpc dirigido ao dono (Owner) para garantir o movimento.
+    /// </summary>
+    private void ForceOwnerTeleportServer(Vector3 spawnPos, Quaternion spawnRot)
     {
-        if (!IsServer) return;
-
-        bool ccWasEnabled = characterController && characterController.enabled;
-        if (ccWasEnabled) characterController.enabled = false;
-
-        Vector3 scale = transform.localScale;
-
-        if (netTransform != null)
+        // 1) Se o servidor puder “commit” (server authority), teleporta também no servidor.
+        try
         {
-            try
+            if (netTransform != null && netTransform.CanCommitToTransform)
             {
-                if (netTransform.CanCommitToTransform)
-                {
-                    netTransform.Teleport(spawnPos, spawnRot, scale);
-                    // Dica: Owners também podem relockar localmente depois do teleport via rede
-                    GameplayCursor.Lock();
-                }
-                else
-                {
-                    var target = new ClientRpcParams
-                    {
-                        Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
-                    };
-                    OwnerTeleportClientRpc(spawnPos, spawnRot, scale, target);
-                }
+                Vector3 scale = transform.localScale;
+                netTransform.Teleport(spawnPos, spawnRot, scale);
             }
-            catch (Exception ex)
+            else
             {
-                Debug.LogError($"[Respawn] Exceção no teleport server: {ex.Message}. Fallback: pedir ao dono.");
-                var target = new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
-                };
-                OwnerTeleportClientRpc(spawnPos, spawnRot, scale, target);
+                // Mesmo sem autoridade, não há problema — o passo 2 vai resolver no Owner.
             }
         }
-        else
+        catch (Exception ex)
         {
-            transform.SetPositionAndRotation(spawnPos, spawnRot);
-            GameplayCursor.Lock();
+            Debug.LogWarning($"[Respawn] Server-side Teleport falhou/sem autoridade: {ex.Message}. A prosseguir com RPC ao Owner.");
         }
 
-        if (ccWasEnabled) characterController.enabled = true;
+        // 2) **Sempre** enviar RPC dirigido ao Owner, que tem autoridade e pode aplicar a pose.
+        var target = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
+        };
+        OwnerTeleportClientRpc(spawnPos, spawnRot, transform.localScale, target);
     }
 
     [ClientRpc]
@@ -130,76 +124,56 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         bool ccWasEnabled = characterController && characterController.enabled;
         if (ccWasEnabled) characterController.enabled = false;
 
-        if (netTransform != null)
+        try
         {
-            try
+            if (netTransform != null)
             {
+                // No Owner, a autoridade é local — este Teleport *vai* aplicar.
                 netTransform.Teleport(pos, rot, scale);
             }
-            catch (Exception ex)
+            else
             {
-                Debug.LogError($"[Respawn] Client(owner) Teleport falhou: {ex.Message}. Usando SetPositionAndRotation.");
                 transform.SetPositionAndRotation(pos, rot);
                 transform.localScale = scale;
             }
         }
-        else
+        catch (Exception ex)
         {
+            Debug.LogError($"[Respawn] Owner Teleport falhou: {ex.Message}. Fallback transform.SetPositionAndRotation.");
             transform.SetPositionAndRotation(pos, rot);
             transform.localScale = scale;
         }
 
-        // GARANTIA: no fim do respawn, bloqueia e oculta o cursor (volta à mira FPS)
         GameplayCursor.Lock();
 
         if (ccWasEnabled) characterController.enabled = true;
     }
 
-    private void GetSpawnPose(out Vector3 pos, out Quaternion rot)
+    // ===================== LÓGICA DE RESOLUÇÃO DE SPAWN =====================
+
+    private Pose ResolveSpawnForOwner(ulong ownerClientId)
     {
-        pos = Vector3.up * Mathf.Max(0.1f, spawnUpOffset);
-        rot = useSpawnRotation ? Quaternion.identity : Quaternion.identity;
-
-        var sm = spawnsManager ? spawnsManager : (SpawnsManager.I ? SpawnsManager.I : FindObjectOfType<SpawnsManager>());
-        if (sm == null || sm.points == null || sm.points.Length == 0)
+        // Fallback simples e determinístico A/B (sem dependências externas).
+        if (spawnPointA == Vector3.zero && spawnPointB == Vector3.zero)
         {
-            SafeSnapToGround(ref pos);
-            return;
+            spawnPointA = new Vector3(-5f, spawnUpOffset, 0f);
+            spawnPointB = new Vector3(5f, spawnUpOffset, 0f);
         }
 
-        if (selectionMode == SelectionMode.RoundRobin)
-        {
-            sm.GetNext(out pos, out rot);
-            float extraUp = Mathf.Max(0f, spawnUpOffset - 0.1f);
-            pos += Vector3.up * extraUp;
-            if (!useSpawnRotation) rot = Quaternion.identity;
-            SafeSnapToGround(ref pos);
-            return;
-        }
+        bool useA = (ownerClientId % 2UL == 0UL);
+        var basePos = useA ? spawnPointA : spawnPointB;
+        var rot = Quaternion.identity;
 
-        int count = sm.points.Length;
-        int idx = 0;
-        switch (selectionMode)
-        {
-            case SelectionMode.Random:
-                idx = UnityEngine.Random.Range(0, count);
-                break;
-            case SelectionMode.ByClientId:
-                idx = (int)(OwnerClientId % (ulong)count);
-                break;
-        }
+        var final = FinalizePose(basePos, rot);
+        Debug.Log($"[Respawn] ResolveSpawn → Owner={ownerClientId}, useA={useA}, basePos={basePos}, finalPos={final.pos}");
+        return final;
+    }
 
-        var t = sm.points[idx];
-        if (t == null)
-        {
-            SafeSnapToGround(ref pos);
-            return;
-        }
-
-        pos = t.position + Vector3.up * Mathf.Max(0.1f, spawnUpOffset);
-        rot = useSpawnRotation ? t.rotation : Quaternion.identity;
-
+    private Pose FinalizePose(Vector3 basePos, Quaternion rot)
+    {
+        var pos = basePos + Vector3.up * Mathf.Max(0.1f, spawnUpOffset);
         SafeSnapToGround(ref pos);
+        return new Pose(pos, rot);
     }
 
     private void SafeSnapToGround(ref Vector3 pos)
@@ -207,7 +181,9 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         if (!groundSnap) return;
 
         Vector3 origin = pos + Vector3.up * Mathf.Max(0.01f, groundRaycastUp);
-        if (Physics.Raycast(origin, Vector3.down, out var hit, Mathf.Max(groundRaycastDown, spawnUpOffset + 2f), ~0, QueryTriggerInteraction.Ignore))
+        if (Physics.Raycast(origin, Vector3.down, out var hit,
+                Mathf.Max(groundRaycastDown, spawnUpOffset + 2f),
+                ~0, QueryTriggerInteraction.Ignore))
         {
             pos = hit.point + Vector3.up * Mathf.Max(0.1f, spawnUpOffset);
         }

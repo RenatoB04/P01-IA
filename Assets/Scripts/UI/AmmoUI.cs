@@ -3,6 +3,20 @@ using UnityEngine;
 
 public class AmmoUI : MonoBehaviour
 {
+    public static AmmoUI Instance;
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+
     public TextMeshProUGUI ammoText;
 
     public void Set(int inMag, int reserve)
@@ -21,4 +35,3 @@ public class AmmoUI : MonoBehaviour
         if (ammoText) ammoText.text = "";
     }
 }
-
