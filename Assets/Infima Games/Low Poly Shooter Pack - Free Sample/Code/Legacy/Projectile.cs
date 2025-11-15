@@ -1,230 +1,238 @@
 ﻿using UnityEngine;
 using System.Collections;
-using Unity.Netcode; // ADIÇÃO: Necessário para o UNetcode
+using Unity.Netcode; // ADIÇÃO: Necessário para o Netcode
 using InfimaGames.LowPolyShooterPack;
 using Random = UnityEngine.Random;
 
 // ALTERAÇÃO: Herda de NetworkBehaviour
-public class Projectile : NetworkBehaviour {
-
+public class Projectile : NetworkBehaviour
+{
     [Range(5, 100)]
     [Tooltip("After how long time should the bullet prefab be destroyed?")]
-    public float destroyAfter;
+    public float destroyAfter = 10f;
+
     [Tooltip("If enabled the bullet destroys on impact")]
     public bool destroyOnImpact = false;
+
     [Tooltip("Minimum time after impact that the bullet is destroyed")]
-    public float minDestroyTime;
+    public float minDestroyTime = 0.05f;
+
     [Tooltip("Maximum time after impact that the bullet is destroyed")]
-    public float maxDestroyTime;
+    public float maxDestroyTime = 0.25f;
+
+    [Header("Damage")]
+    [Tooltip("Dano base aplicado ao Health quando acerta num alvo.")]
+    [SerializeField] private float damage = 20f;
 
     // CAMPOS DE REDE (Injetados pelo Servidor/RPC)
-    [Header("Network Data")] // ADIÇÃO
-    [HideInInspector] public ulong ownerClientId; // Para quem acertar
-    [HideInInspector] public int ownerTeam; // ID da equipa do atirador
-    public NetworkVariable<Vector3> initialVelocity = new NetworkVariable<Vector3>(Vector3.zero); // Velocidade inicial
-    
-    // CAMPOS DE IMPACTO DO KIT
+    [Header("Network Data")]
+    [HideInInspector] public ulong ownerClientId = ulong.MaxValue; // Client que disparou (definido no PlayerWeaponController)
+    [HideInInspector] public int ownerTeam = -1;                   // Equipa do atirador
+    public NetworkVariable<Vector3> initialVelocity = new NetworkVariable<Vector3>(Vector3.zero);
+
+    // IMPACTOS DO KIT
     [Header("Impact Effect Prefabs")]
-    public Transform [] bloodImpactPrefabs;
-    public Transform [] metalImpactPrefabs;
-    public Transform [] dirtImpactPrefabs;
-    public Transform []    concreteImpactPrefabs;
+    public Transform[] bloodImpactPrefabs;
+    public Transform[] metalImpactPrefabs;
+    public Transform[] dirtImpactPrefabs;
+    public Transform[] concreteImpactPrefabs;
 
     private Rigidbody rb;
-    private Collider projectileCollider; // Referência ao collider da bala
+    private Collider projectileCollider;
 
-    // ALTERAÇÃO: Usa OnNetworkSpawn em vez de Start
-    public override void OnNetworkSpawn ()
+    // =====================================================================
+    //                            NETWORK SPAWN
+    // =====================================================================
+    public override void OnNetworkSpawn()
     {
-       base.OnNetworkSpawn();
+        base.OnNetworkSpawn();
 
-       rb = GetComponent<Rigidbody>();
-       projectileCollider = GetComponent<Collider>();
+        rb = GetComponent<Rigidbody>();
+        projectileCollider = GetComponent<Collider>();
 
-       if (rb == null || projectileCollider == null)
-       {
-           Debug.LogError("Projectile: Falta Rigidbody ou Collider no prefab da bala.");
-           // Usamos NetworkObject.Despawn() se o spawn falhar, se o objeto existir em rede
-           if (IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-           return;
-       }
+        if (rb == null || projectileCollider == null)
+        {
+            Debug.LogError("Projectile: Falta Rigidbody ou Collider no prefab da bala.");
+            if (IsSpawned) NetworkObject.Despawn(true);
+            else Destroy(gameObject);
+            return;
+        }
 
-       // 1. APLICAR VELOCIDADE: (Apenas o Servidor a define, mas todos a aplicam)
-       if (initialVelocity.Value != Vector3.zero)
-       {
-           rb.linearVelocity = initialVelocity.Value;
-       }
-       
-       // 2. CORREÇÃO DA IGNORÂNCIA DE COLISÃO DO PLAYER (Anti-Self-Hit)
-       // Apenas o dono da bala ignora a sua própria colisão
-       if (IsOwner) 
-       {
-           // CORREÇÃO FINAL DA SINTAXE DE BUSCA: Usamos TryGetValue da coleção global
-           if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(OwnerClientId, out NetworkObject playerNetworkObject))
-           {
-               if (playerNetworkObject != null && playerNetworkObject.TryGetComponent<Collider>(out Collider playerCollider))
-               {
-                   Physics.IgnoreCollision(playerCollider, projectileCollider);
-               }
-           }
-       }
-       
-       // Start destroy timer
-       StartCoroutine (DestroyAfter ());
-    }
-    
-    // If the bullet collides with anything
-    private void OnCollisionEnter (Collision collision)
-    {
-       // LÓGICA CRUCIAL DE REDE: SÓ O SERVIDOR LIDA COM COLISÕES DE BALAS
-       if (!IsServer) 
-       {
-           // O cliente apenas espera que o servidor destrua a bala.
-           return;
-       }
-       
-       //Ignore collisions with other projectiles.
-       if (collision.gameObject.GetComponent<Projectile>() != null)
-          return;
-       
-       // ADIÇÃO DE LÓGICA DE DANO DE REDE
-       if (collision.gameObject.TryGetComponent<Health>(out var healthComponent))
-       {
-           // Se a bala atingir alguém que não é da nossa equipa (ajuste o team ID conforme a sua lógica)
-           if (ownerTeam != -1 && healthComponent.team.Value != ownerTeam)
-           {
-               // Exemplo: Aplica 20 de dano
-               // healthComponent.ApplyDamageServer(20f, ownerTeam, ownerClientId, collision.contacts[0].point, true);
-           }
-       }
-       
-       //If destroy on impact is false, start 
-       //coroutine with random destroy timer
-       if (!destroyOnImpact) 
-       {
-          StartCoroutine (DestroyTimer ());
-       }
-       //Otherwise, destroy bullet on impact
-       // Usa o Despawn do UNetcode em vez do Destroy (para ser replicado na rede)
-       else 
-       {
-          if (NetworkObject.IsSpawned)
-              NetworkObject.Despawn(true); 
-          else
-              Destroy(gameObject);
-          return; // Adicionado return após despawn/destroy
-       }
+        // Aplicar a velocidade inicial vinda do servidor
+        if (initialVelocity.Value != Vector3.zero)
+            rb.linearVelocity = initialVelocity.Value;
 
-       // --- (O RESTO DO CÓDIGO DE IMPACTO DO KIT PERMANECE IGUAL, mas é executado pelo SERVIDOR) ---
-       
-       //If bullet collides with "Blood" tag
-       if (collision.transform.tag == "Blood") 
-       {
-          //Instantiate random impact prefab from array
-          Instantiate (bloodImpactPrefabs [Random.Range 
-             (0, bloodImpactPrefabs.Length)], transform.position, 
-             Quaternion.LookRotation (collision.contacts [0].normal));
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
+        // Ignorar colisão com o jogador que disparou (feito no SERVIDOR, que é quem simula a física)
+        if (IsServer && ownerClientId != ulong.MaxValue && NetworkManager.Singleton != null)
+        {
+            if (NetworkManager.Singleton.ConnectedClients.TryGetValue(ownerClientId, out var client) &&
+                client != null && client.PlayerObject != null)
+            {
+                if (client.PlayerObject.TryGetComponent<Collider>(out var playerCollider))
+                {
+                    Physics.IgnoreCollision(playerCollider, projectileCollider, true);
+                }
+            }
+        }
 
-       //If bullet collides with "Metal" tag
-       if (collision.transform.tag == "Metal") 
-       {
-          //Instantiate random impact prefab from array
-          Instantiate (metalImpactPrefabs [Random.Range 
-             (0, bloodImpactPrefabs.Length)], transform.position, 
-             Quaternion.LookRotation (collision.contacts [0].normal));
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
-
-       //If bullet collides with "Dirt" tag
-       if (collision.transform.tag == "Dirt") 
-       {
-          //Instantiate random impact prefab from array
-          Instantiate (dirtImpactPrefabs [Random.Range 
-             (0, bloodImpactPrefabs.Length)], transform.position, 
-             Quaternion.LookRotation (collision.contacts [0].normal));
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
-
-       //If bullet collides with "Concrete" tag
-       if (collision.transform.tag == "Concrete") 
-       {
-          //Instantiate random impact prefab from array
-          Instantiate (concreteImpactPrefabs [Random.Range 
-             (0, bloodImpactPrefabs.Length)], transform.position, 
-             Quaternion.LookRotation (collision.contacts [0].normal));
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
-
-       //If bullet collides with "Target" tag
-       if (collision.transform.tag == "Target") 
-       {
-          //Toggle "isHit" on target object
-          collision.transform.gameObject.GetComponent
-             <TargetScript>().isHit = true;
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
-          
-       //If bullet collides with "ExplosiveBarrel" tag
-       if (collision.transform.tag == "ExplosiveBarrel") 
-       {
-          //Toggle "explode" on explosive barrel object
-          collision.transform.gameObject.GetComponent
-             <ExplosiveBarrelScript>().explode = true;
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
-
-       //If bullet collides with "GasTank" tag
-       if (collision.transform.tag == "GasTank") 
-       {
-          //Toggle "isHit" on gas tank object
-          collision.transform.gameObject.GetComponent
-             <GasTankScript> ().isHit = true;
-          //Destroy bullet object
-          if (NetworkObject.IsSpawned) NetworkObject.Despawn(true); else Destroy(gameObject);
-          return;
-       }
-       
-       // Se atingiu algo mas não foi destruído acima (fallback):
-       if (NetworkObject.IsSpawned)
-           NetworkObject.Despawn(true);
-       else
-           Destroy(gameObject);
+        // Timer de auto-destruição
+        StartCoroutine(DestroyAfter());
     }
 
-    private IEnumerator DestroyTimer () 
+    // =====================================================================
+    //                        PROCESSAMENTO DE IMPACTO
+    // =====================================================================
+
+    /// <summary>
+    /// Função comum para tratar impacto (dano + efeitos).
+    /// Só é executada no Servidor.
+    /// </summary>
+    private void ProcessHit(GameObject hitObject, Vector3 hitPoint, Vector3 hitNormal)
     {
-       //Wait random time based on min and max values
-       yield return new WaitForSeconds
-          (Random.Range(minDestroyTime, maxDestroyTime));
-       // Destruir na rede
-       if (NetworkObject.IsSpawned)
-           NetworkObject.Despawn(true);
-       else
-           Destroy(gameObject);
+        // Só o servidor trata de dano e destruição
+        if (!IsServer)
+            return;
+
+        // Ignorar outras balas
+        if (hitObject.GetComponent<Projectile>() != null)
+            return;
+
+        // ---------- DANO ----------
+        // Procura um Health em cima na hierarquia (útil quando o collider está num filho, ex.: BlueSoldier_Male/Hitbox_Body)
+        var healthComponent = hitObject.GetComponentInParent<Health>();
+        if (healthComponent != null)
+        {
+            // Chama o núcleo server-authoritative do teu Health
+            healthComponent.ApplyDamageServer(
+                damage,
+                ownerTeam,
+                ownerClientId,
+                hitPoint,
+                true
+            );
+        }
+
+        // ---------- EFEITOS VISUAIS ----------
+        string tag = hitObject.tag;
+
+        if (tag == "Blood" && bloodImpactPrefabs.Length > 0)
+        {
+            Instantiate(
+                bloodImpactPrefabs[Random.Range(0, bloodImpactPrefabs.Length)],
+                hitPoint,
+                Quaternion.LookRotation(hitNormal));
+            DespawnSelf();
+            return;
+        }
+
+        if (tag == "Metal" && metalImpactPrefabs.Length > 0)
+        {
+            Instantiate(
+                metalImpactPrefabs[Random.Range(0, metalImpactPrefabs.Length)],
+                hitPoint,
+                Quaternion.LookRotation(hitNormal));
+            DespawnSelf();
+            return;
+        }
+
+        if (tag == "Dirt" && dirtImpactPrefabs.Length > 0)
+        {
+            Instantiate(
+                dirtImpactPrefabs[Random.Range(0, dirtImpactPrefabs.Length)],
+                hitPoint,
+                Quaternion.LookRotation(hitNormal));
+            DespawnSelf();
+            return;
+        }
+
+        if (tag == "Concrete" && concreteImpactPrefabs.Length > 0)
+        {
+            Instantiate(
+                concreteImpactPrefabs[Random.Range(0, concreteImpactPrefabs.Length)],
+                hitPoint,
+                Quaternion.LookRotation(hitNormal));
+            DespawnSelf();
+            return;
+        }
+
+        if (tag == "Target")
+        {
+            var target = hitObject.GetComponent<TargetScript>();
+            if (target != null) target.isHit = true;
+            DespawnSelf();
+            return;
+        }
+
+        if (tag == "ExplosiveBarrel")
+        {
+            var barrel = hitObject.GetComponent<ExplosiveBarrelScript>();
+            if (barrel != null) barrel.explode = true;
+            DespawnSelf();
+            return;
+        }
+
+        if (tag == "GasTank")
+        {
+            var gas = hitObject.GetComponent<GasTankScript>();
+            if (gas != null) gas.isHit = true;
+            DespawnSelf();
+            return;
+        }
+
+        // Se chegou aqui, foi impacto genérico.
+        if (destroyOnImpact)
+            DespawnSelf();
+        else
+            StartCoroutine(DestroyTimer());
     }
 
-    private IEnumerator DestroyAfter () 
+    // Colisão clássica (quando ambos os colliders NÃO são trigger)
+    private void OnCollisionEnter(Collision collision)
     {
-       //Wait for set amount of time
-       yield return new WaitForSeconds (destroyAfter);
-       // Destruir na rede
-       if (NetworkObject.IsSpawned)
-           NetworkObject.Despawn(true);
-       else
-           Destroy(gameObject);
+        if (collision.contactCount > 0)
+        {
+            var contact = collision.contacts[0];
+            ProcessHit(collision.gameObject, contact.point, contact.normal);
+        }
+        else
+        {
+            ProcessHit(collision.gameObject, transform.position, -rb.linearVelocity.normalized);
+        }
+    }
+
+    // Trigger (quando pelo menos um dos colliders é IsTrigger = true)
+    private void OnTriggerEnter(Collider other)
+    {
+        // Ponto/normal aproximados para triggers (não há contacts)
+        Vector3 hitPoint = transform.position;
+        Vector3 hitNormal = rb != null && rb.linearVelocity != Vector3.zero
+            ? -rb.linearVelocity.normalized
+            : Vector3.up;
+
+        ProcessHit(other.gameObject, hitPoint, hitNormal);
+    }
+
+    // =====================================================================
+    //                           DESTRUIÇÃO / TIMERS
+    // =====================================================================
+
+    private void DespawnSelf()
+    {
+        if (NetworkObject != null && NetworkObject.IsSpawned)
+            NetworkObject.Despawn(true);
+        else
+            Destroy(gameObject);
+    }
+
+    private IEnumerator DestroyTimer()
+    {
+        yield return new WaitForSeconds(Random.Range(minDestroyTime, maxDestroyTime));
+        DespawnSelf();
+    }
+
+    private IEnumerator DestroyAfter()
+    {
+        yield return new WaitForSeconds(destroyAfter);
+        DespawnSelf();
     }
 }
