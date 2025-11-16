@@ -339,7 +339,7 @@ MonoBehaviour:
   txtCountdown: {fileID: 128523923}
   btnPlayBots: {fileID: 1362680622}
   gameSceneName: Prototype
-  roomCodeLength: 6
+  roomCodeLength: 4
   maxPlayers: 2
   countdownSeconds: 3
 --- !u!4 &55109586
@@ -1312,7 +1312,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1254386882}
   m_HandleRect: {fileID: 1254386881}
   m_Direction: 0
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -3365,7 +3365,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 206605750}
   m_Direction: 2
   m_Value: 1
-  m_Size: 0.61
+  m_Size: 0.6100001
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
