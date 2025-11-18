@@ -810,7 +810,6 @@ GameObject:
   - component: {fileID: -7511104848531135329}
   - component: {fileID: 1327982029724605058}
   - component: {fileID: 3325829605012860292}
-  - component: {fileID: -1649541708463674116}
   m_Layer: 10
   m_Name: FPSPlayer
   m_TagString: Player
@@ -1487,9 +1486,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathAndRespawn
   ShowTopMostFoldoutHeaderGroup: 1
   netTransform: {fileID: 19466126240071401}
-  characterController: {fileID: 0}
+  capsuleCollider: {fileID: 0}
   health: {fileID: -3491376277746537993}
+  rb: {fileID: 0}
   deathCanvasUI: {fileID: 0}
+  respawnDelay: 0
   spawnPointA: {x: 87, y: 1.5, z: 115}
   spawnPointB: {x: 87, y: 1.5, z: 175}
   spawnUpOffset: 1.5
@@ -1510,7 +1511,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerShield
   ShowTopMostFoldoutHeaderGroup: 1
   shieldVisual: {fileID: 0}
-  pulseVfxPrefab: {fileID: 6608167148170694059, guid: 47db5b5625b2aa141b0b9d6add0d426f, type: 3}
+  pulseVfxPrefab: {fileID: 0}
   shieldMode: 0
   shieldCapacity: 100
   shieldDuration: 2
@@ -1574,30 +1575,6 @@ MonoBehaviour:
   weaponCamera: {fileID: 0}
   firstPersonLayerName: FirstPerson
   audioListener: {fileID: 5827704354076846068}
---- !u!114 &-1649541708463674116
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2751027687307977091}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: efaeca0c3c0274d41a6156f57e84b16a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerScore
-  ShowTopMostFoldoutHeaderGroup: 1
-  pointsPerKill: 100
-  Kills:
-    m_InternalValue: 0
-  Score:
-    m_InternalValue: 0
-  OnScoreChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  OnKillsChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!1 &2906013363015915789
 GameObject:
   m_ObjectHideFlags: 0

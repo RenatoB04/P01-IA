@@ -1,215 +1,206 @@
 using UnityEngine;
 using Unity.Netcode;
-using Unity.Netcode.Components; // Necessário para NetworkTransform
+using Unity.Netcode.Components;
 using System;
-
-// NOTA: Assumimos que existe uma classe 'Health' com uma NetworkVariable<bool> chamada 'isDead'.
-// Assumimos também que existe uma classe estática 'GameplayCursor' com métodos Lock() e Unlock().
+using System.Collections;
+using TMPro;
 
 public class PlayerDeathAndRespawn : NetworkBehaviour
 {
-    // ==================================================================================
-    // === NOVAS VARIÁVEIS PARA CONTROLO DE ESTADO E UI =================================
-    // ==================================================================================
-
     [Header("Refs")]
     [SerializeField] private NetworkTransform netTransform;
-    [SerializeField] private CharacterController characterController;
-    [SerializeField] private Health health; // Componente Health do jogador
+    [SerializeField] private CapsuleCollider capsuleCollider;
+    [SerializeField] private Health health;
+    // Adiciona referência ao Rigidbody para parar o movimento residual
+    [SerializeField] private Rigidbody rb;
 
-    [Header("Componentes de Controlo e UI")]
-    [Tooltip("O GameObject que contém a UI de Morte/Respawn (Canvas).")]
+    [Header("UI")]
     [SerializeField] private GameObject deathCanvasUI;
+    private TextMeshProUGUI _respawnTimerTextInstance;
+    private Coroutine _uiFinderCo;
 
-    /// <summary>
-    /// Propriedade pública a ser verificada por scripts como PlayerMovement ou PlayerShooting.
-    /// Se for TRUE, o jogador pode interagir (mexer/disparar). Se for FALSE (morto), deve ser ignorado.
-    /// </summary>
+    [Header("Respawn Config")]
+    [SerializeField] private float respawnDelay = 3.0f;
+
+    // Sincroniza a posição inicial do servidor para todos
+    private NetworkVariable<Vector3> _networkSpawnPosition = new NetworkVariable<Vector3>(
+        Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private Coroutine _respawnCoroutine;
+
+    // Propriedade para outros scripts saberem se estamos vivos
     public bool IsPlayerControlled => IsOwner && health != null && !health.isDead.Value;
 
-    // ==================================================================================
-    // === REFS E LÓGICA EXISTENTE ======================================================
-    // ==================================================================================
-
-    [Header("Spawn Points Fixos (Mundiais)")]
-    [Tooltip("SpawnPoint A (por exemplo lado esquerdo do mapa).")]
+    [Header("Spawn Points")]
     [SerializeField] private Vector3 spawnPointA = new Vector3(87f, 1.5f, 115f);
-
-    [Tooltip("SpawnPoint B (por exemplo lado direito do mapa).")]
     [SerializeField] private Vector3 spawnPointB = new Vector3(87f, 1.5f, 175f);
-
-    [Header("Offset/Segurança")]
-    [Tooltip("Offset vertical aplicado acima do ponto de spawn.")]
     [SerializeField] private float spawnUpOffset = 1.5f;
-    [Tooltip("Raycast para ajustar o spawn ao chão (recomendado).")]
     [SerializeField] private bool groundSnap = true;
     [SerializeField] private float groundRaycastUp = 2f;
     [SerializeField] private float groundRaycastDown = 10f;
 
-    private struct Pose
-    {
-        public Vector3 pos;
-        public Quaternion rot;
-        public Pose(Vector3 p, Quaternion r) { pos = p; rot = r; }
-    }
+    private struct Pose { public Vector3 pos; public Quaternion rot; public Pose(Vector3 p, Quaternion r) { pos = p; rot = r; } }
 
     private void Awake()
     {
         if (!netTransform) netTransform = GetComponentInChildren<NetworkTransform>();
-        if (!characterController) characterController = GetComponentInChildren<CharacterController>();
+        if (!capsuleCollider) capsuleCollider = GetComponentInChildren<CapsuleCollider>();
         if (!health) health = GetComponentInChildren<Health>();
+        if (!rb) rb = GetComponent<Rigidbody>(); // Tenta encontrar o RB automaticamente
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+        if (!netTransform) netTransform = GetComponentInChildren<NetworkTransform>();
 
-        if (!netTransform)
-            netTransform = GetComponentInChildren<NetworkTransform>();
-
-        // Lógica de spawn inicial (apenas servidor)
         if (IsServer)
         {
+            // Calcular e guardar posição inicial
             var spawn = ResolveSpawnForOwner(OwnerClientId);
-            Debug.Log($"[Respawn] OnNetworkSpawn → Spawn inicial. Owner={OwnerClientId}, SpawnPos={spawn.pos}");
+            _networkSpawnPosition.Value = spawn.pos;
+
+            // Forçar teleporte inicial
             ForceOwnerTeleportServer(spawn.pos, spawn.rot);
         }
 
-        // Cliente Owner subscreve para reagir a mortes/respawns
-        if (IsOwner && health != null)
+        if (IsOwner)
         {
-            // Set do estado inicial ao fazer o spawn
-            // A NetworkVariable já terá o valor correto (false, por defeito)
-            HandleControlState(health.isDead.Value, health.isDead.Value);
-
-            // Subscrição para reagir a futuras mudanças de estado
-            health.isDead.OnValueChanged += HandleControlState;
+            _uiFinderCo = StartCoroutine(FindDeathUIRefs());
+            if (health != null)
+            {
+                // Forçar reset visual
+                HandleControlState(health.isDead.Value, health.isDead.Value);
+                health.isDead.OnValueChanged += HandleControlState;
+            }
         }
+    }
+
+    private IEnumerator FindDeathUIRefs()
+    {
+        // Procura a UI na cena (igual ao anterior)
+        const int safetyFrames = 600;
+        int frames = 0;
+        GameObject timerTextObj = null;
+
+        while (timerTextObj == null && frames < safetyFrames)
+        {
+            yield return null;
+            frames++;
+            timerTextObj = GameObject.FindWithTag("RespawnTimerTag");
+        }
+
+        if (timerTextObj != null)
+        {
+            _respawnTimerTextInstance = timerTextObj.GetComponent<TextMeshProUGUI>();
+            if (deathCanvasUI == null)
+            {
+                deathCanvasUI = timerTextObj.GetComponentInParent<Canvas>(true)?.gameObject;
+                if (deathCanvasUI != null) deathCanvasUI.SetActive(false);
+            }
+        }
+        _uiFinderCo = null;
     }
 
     public override void OnNetworkDespawn()
     {
         base.OnNetworkDespawn();
-
-        // Limpar subscrição ao sair da rede
-        if (IsOwner && health != null)
-        {
-            health.isDead.OnValueChanged -= HandleControlState;
-        }
+        if (IsOwner && health != null) health.isDead.OnValueChanged -= HandleControlState;
+        if (_respawnCoroutine != null) StopCoroutine(_respawnCoroutine);
+        if (_uiFinderCo != null) StopCoroutine(_uiFinderCo);
     }
 
-    // ==================================================================================
-    // === LÓGICA DE CONTROLO DE ESTADO (CLIENTE OWNER) ==================================
-    // ==================================================================================
-
-    /// <summary>
-    /// Chamado no Client Owner quando o estado de morte muda (trigger via Health.isDead NetworkVariable).
-    /// Controla a UI de Morte e o cursor.
-    /// </summary>
     private void HandleControlState(bool previousDead, bool currentDead)
     {
-        // Esta lógica SÓ deve ser executada pelo OWNER.
         if (!IsOwner) return;
 
         if (currentDead)
         {
-            // O jogador morreu (isDead = true).
-            Debug.Log("[DeathAndRespawn] Player morreu. Desabilitar Controlo, Mostrar UI, Desbloquear Cursor.");
-            
-            // 1. Mostrar o Canvas de Morte (Permite interação)
-            if (deathCanvasUI != null)
-            {
-                deathCanvasUI.SetActive(true);
-            }
-            
-            // 2. Desbloquear o cursor do rato para permitir cliques na UI
-            GameplayCursor.Unlock(); 
-
-            // 3. Outros scripts (Movimento/Disparo) devem parar de funcionar 
-            //    automaticamente verificando a propriedade IsPlayerControlled.
+            if (deathCanvasUI != null) deathCanvasUI.SetActive(true);
+            if (_respawnTimerTextInstance != null) _respawnTimerTextInstance.gameObject.SetActive(false);
+            GameplayCursor.Unlock();
         }
         else
         {
-            // O jogador está vivo / renasceu (isDead = false).
-            Debug.Log("[DeathAndRespawn] Player renasceu. Habilitar Controlo, Esconder UI, Bloquear Cursor.");
-            
-            // 1. Esconder o Canvas de Morte
-            if (deathCanvasUI != null)
-            {
-                deathCanvasUI.SetActive(false);
-            }
-            
-            // 2. Bloquear o cursor para o gameplay (após esconder a UI)
-            GameplayCursor.Lock(); 
-            
-            // 3. Outros scripts voltam a funcionar automaticamente.
+            if (deathCanvasUI != null) deathCanvasUI.SetActive(false);
+            if (_respawnTimerTextInstance != null) _respawnTimerTextInstance.gameObject.SetActive(false);
+            GameplayCursor.Lock();
         }
     }
 
+    // --- LÓGICA DO SERVIDOR ---
 
-    // ==================================================================================
-    // === LÓGICA DE RESPAWN (SERVER) ====================================================
-    // ==================================================================================
-
-    /// <summary>
-    /// RPC de respawn, usado quando o jogador morre.
-    /// Para spawn inicial forçado, usar ignoreAliveCheck = true.
-    /// </summary>
     [ServerRpc(RequireOwnership = false)]
     public void RespawnServerRpc(bool ignoreAliveCheck = false, ServerRpcParams rpcParams = default)
     {
         if (!IsServer) return;
+        if (health == null || _respawnCoroutine != null) return;
+        if (!ignoreAliveCheck && !health.isDead.Value) return;
 
-        if (health == null)
-        {
-            Debug.LogError("[Respawn] Health nulo no servidor.");
-            return;
-        }
-
-        if (!ignoreAliveCheck && !health.isDead.Value)
-        {
-            Debug.LogWarning("[Respawn] Ignorado: jogador não está morto.");
-            return;
-        }
-
-        var spawn = ResolveSpawnForOwner(OwnerClientId);
-        Debug.Log($"[Respawn] Respawn/Spawn no servidor. Owner={OwnerClientId} SpawnPos={spawn.pos}");
-
-        // CRUCIAL: Isto deve alterar health.isDead.Value para FALSE, 
-        // o que por sua vez despoleta o HandleControlState no Owner.
-        health.ResetFullHealth(); 
-        
-        ForceOwnerTeleportServer(spawn.pos, spawn.rot);
+        _respawnCoroutine = StartCoroutine(RespawnSequenceCoroutine(OwnerClientId));
     }
 
-    /// <summary>
-    /// Força o dono a teletransportar-se. 
-    /// </summary>
-    private void ForceOwnerTeleportServer(Vector3 spawnPos, Quaternion spawnRot)
+    private IEnumerator RespawnSequenceCoroutine(ulong clientID)
     {
-        // 1) Se o servidor puder “commit” (server authority), teleporta também no servidor.
-        try
+        float timer = respawnDelay;
+        UpdateRespawnTimerClientRpc(timer, new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientID } } });
+
+        while (timer > 0)
         {
-            if (netTransform != null && netTransform.CanCommitToTransform)
+            yield return new WaitForSeconds(1.0f);
+            timer -= 1.0f;
+            UpdateRespawnTimerClientRpc(timer, new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientID } } });
+        }
+
+        // 1. Determinar Posição de Respawn
+        var spawnPos = _networkSpawnPosition.Value;
+
+        // FALLBACK DE SEGURANÇA: Se a posição for (0,0,0), recalcula
+        if (spawnPos == Vector3.zero)
+        {
+            var newSpawn = ResolveSpawnForOwner(clientID);
+            spawnPos = newSpawn.pos;
+            _networkSpawnPosition.Value = spawnPos; // Atualiza para a próxima
+        }
+
+        // 2. TELEPORTE (A magia acontece aqui)
+        ForceOwnerTeleportServer(spawnPos, Quaternion.identity);
+
+        // 3. Restaurar Vida
+        health.ResetFullHealth();
+
+        UpdateRespawnTimerClientRpc(0f, new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientID } } });
+        _respawnCoroutine = null;
+    }
+
+    [ClientRpc]
+    private void UpdateRespawnTimerClientRpc(float timeRemaining, ClientRpcParams rpcParams = default)
+    {
+        if (!IsOwner) return;
+        if (_respawnTimerTextInstance != null)
+        {
+            if (timeRemaining > 0)
             {
-                Vector3 scale = transform.localScale;
-                netTransform.Teleport(spawnPos, spawnRot, scale);
+                if (!_respawnTimerTextInstance.gameObject.activeSelf) _respawnTimerTextInstance.gameObject.SetActive(true);
+                _respawnTimerTextInstance.text = $"Respawning in: {Mathf.CeilToInt(timeRemaining)}";
             }
             else
             {
-                // Mesmo sem autoridade, o RPC ao Owner irá resolver.
+                _respawnTimerTextInstance.gameObject.SetActive(false);
             }
         }
-        catch (Exception ex)
+    }
+
+    private void ForceOwnerTeleportServer(Vector3 spawnPos, Quaternion spawnRot)
+    {
+        // Teleporte no Servidor (se tiver autoridade)
+        if (netTransform != null && netTransform.CanCommitToTransform)
         {
-            Debug.LogWarning($"[Respawn] Server-side Teleport falhou/sem autoridade: {ex.Message}. A prosseguir com RPC ao Owner.");
+            netTransform.Teleport(spawnPos, spawnRot, transform.localScale);
         }
 
-        // 2) **Sempre** enviar RPC dirigido ao Owner.
-        var target = new ClientRpcParams
-        {
-            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
-        };
+        // Envia comando para o DONO fazer o teleporte local
+        var target = new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } } };
         OwnerTeleportClientRpc(spawnPos, spawnRot, transform.localScale, target);
     }
 
@@ -218,53 +209,63 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     {
         if (!IsOwner) return;
 
-        // Desativar temporariamente o CharacterController para evitar "jittering" no Teleport.
-        bool ccWasEnabled = characterController && characterController.enabled;
-        if (ccWasEnabled) characterController.enabled = false;
-
-        try
-        {
-            if (netTransform != null)
-            {
-                // No Owner, a autoridade é local — este Teleport *vai* aplicar.
-                netTransform.Teleport(pos, rot, scale);
-            }
-            else
-            {
-                transform.SetPositionAndRotation(pos, rot);
-                transform.localScale = scale;
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[Respawn] Owner Teleport falhou: {ex.Message}. Fallback transform.SetPositionAndRotation.");
-            transform.SetPositionAndRotation(pos, rot);
-            transform.localScale = scale;
-        }
-
-        // O controlo do cursor (Lock/Unlock) é agora feito em HandleControlState.
-        
-        if (ccWasEnabled) characterController.enabled = true;
+        // INICIA PROCESSO DE TELEPORTE AGRESSIVO
+        StartCoroutine(TeleportSequence(pos, rot, scale));
     }
 
-    // ===================== LÓGICA DE RESOLUÇÃO DE SPAWN =====================
+    private IEnumerator TeleportSequence(Vector3 targetPos, Quaternion targetRot, Vector3 targetScale)
+    {
+        // 1. Desligar TUDO que possa causar movimento
+        if (capsuleCollider) capsuleCollider.enabled = false;
 
+        if (rb)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true; // Congela a física completamente
+        }
+
+        // 2. Aplicar Teleporte
+        if (netTransform != null)
+        {
+            netTransform.Teleport(targetPos, targetRot, targetScale);
+        }
+
+        // Garante que o transform local também vai (redundância)
+        transform.position = targetPos;
+        transform.rotation = targetRot;
+
+        // 3. Esperar que o Unity processe a nova posição (evita o rollback)
+        yield return new WaitForEndOfFrame();
+        yield return new WaitForFixedUpdate(); // Espera extra para física
+
+        // 4. Reativar TUDO
+        if (netTransform != null)
+        {
+            // Reforça o teleporte mais uma vez
+            netTransform.Teleport(targetPos, targetRot, targetScale);
+        }
+
+        if (rb)
+        {
+            rb.isKinematic = false; // Descongela
+            rb.linearVelocity = Vector3.zero; // Garante que está parado
+        }
+
+        if (capsuleCollider) capsuleCollider.enabled = true;
+    }
+
+    // --- Lógica de Spawn (Inalterada) ---
     private Pose ResolveSpawnForOwner(ulong ownerClientId)
     {
-        // Fallback simples e determinístico A/B (sem dependências externas).
         if (spawnPointA == Vector3.zero && spawnPointB == Vector3.zero)
         {
             spawnPointA = new Vector3(-5f, spawnUpOffset, 0f);
             spawnPointB = new Vector3(5f, spawnUpOffset, 0f);
         }
-
         bool useA = (ownerClientId % 2UL == 0UL);
         var basePos = useA ? spawnPointA : spawnPointB;
-        var rot = Quaternion.identity;
-
-        var final = FinalizePose(basePos, rot);
-        Debug.Log($"[Respawn] ResolveSpawn → Owner={ownerClientId}, useA={useA}, basePos={basePos}, finalPos={final.pos}");
-        return final;
+        return FinalizePose(basePos, Quaternion.identity);
     }
 
     private Pose FinalizePose(Vector3 basePos, Quaternion rot)
@@ -277,11 +278,8 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     private void SafeSnapToGround(ref Vector3 pos)
     {
         if (!groundSnap) return;
-
         Vector3 origin = pos + Vector3.up * Mathf.Max(0.01f, groundRaycastUp);
-        if (Physics.Raycast(origin, Vector3.down, out var hit,
-                Mathf.Max(groundRaycastDown, spawnUpOffset + 2f),
-                ~0, QueryTriggerInteraction.Ignore))
+        if (Physics.Raycast(origin, Vector3.down, out var hit, Mathf.Max(groundRaycastDown, spawnUpOffset + 2f), ~0, QueryTriggerInteraction.Ignore))
         {
             pos = hit.point + Vector3.up * Mathf.Max(0.1f, spawnUpOffset);
         }
