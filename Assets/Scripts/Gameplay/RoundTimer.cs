@@ -3,7 +3,7 @@ using TMPro;
 using Unity.Netcode;
 using UnityEngine.InputSystem;
 using System.Collections;
-using System.Linq; // Necessário para ordenar a lista de scores
+using System.Linq; 
 
 public class RoundTimer : NetworkBehaviour
 {
@@ -52,48 +52,44 @@ public class RoundTimer : NetworkBehaviour
         isRoundActive.Value = true;
     }
 
-public void EndRound()
+    public void EndRound()
     {
         if (!IsServer) return;
         isRoundActive.Value = false;
         
-        // --- DEBUG INÍCIO ---
-        Debug.Log("[RoundTimer] A calcular vencedor...");
-        PlayerScore[] allScores = FindObjectsOfType<PlayerScore>();
-        Debug.Log($"[RoundTimer] Encontrei {allScores.Length} jogadores com PlayerScore.");
-
+        // --- CÁLCULO DO VENCEDOR (ATUALIZADO PARA NOMES) ---
         string winnerName = "Ninguém";
         int highScore = -1;
 
+        PlayerScore[] allScores = FindObjectsOfType<PlayerScore>();
+
         if (allScores.Length > 0)
         {
-            // Ordena e mostra quem tem quanto
-            foreach(var p in allScores)
-            {
-                Debug.Log($" -> Player {p.OwnerClientId}: {p.Score.Value} pontos");
-            }
-
             var bestPlayer = allScores.OrderByDescending(p => p.Score.Value).First();
             
             if (bestPlayer != null)
             {
                 highScore = bestPlayer.Score.Value;
-                winnerName = $"Player {bestPlayer.OwnerClientId}";
-                Debug.Log($"[RoundTimer] Vencedor Eleito: {winnerName} com {highScore}");
+                
+                // TENTA OBTER O NOME REAL DO JOGADOR
+                var nameScript = bestPlayer.GetComponent<PlayerName>();
+                if (nameScript != null)
+                {
+                    winnerName = nameScript.Name;
+                }
+                else
+                {
+                    // Fallback se não tiver o script
+                    winnerName = $"Player {bestPlayer.OwnerClientId}";
+                }
             }
         }
-        else
-        {
-            Debug.LogWarning("[RoundTimer] ERRO: A lista de PlayerScores está vazia! Verifica o Prefab.");
-        }
-        // --- DEBUG FIM ---
 
-        // Envia os resultados
         RoundEndedClientRpc(winnerName, highScore);
     }
+
     private void OnTimeChanged(float prev, float curr) => UpdateTimerUI(curr);
 
-    // Agora aceita argumentos com o resultado
     [ClientRpc]
     private void RoundEndedClientRpc(string winner, int score)
     {

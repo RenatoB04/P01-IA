@@ -810,6 +810,8 @@ GameObject:
   - component: {fileID: -7511104848531135329}
   - component: {fileID: 1327982029724605058}
   - component: {fileID: 3325829605012860292}
+  - component: {fileID: 7217970640289793155}
+  - component: {fileID: 6907939308367491131}
   m_Layer: 10
   m_Name: FPSPlayer
   m_TagString: Player
@@ -1575,6 +1577,78 @@ MonoBehaviour:
   weaponCamera: {fileID: 0}
   firstPersonLayerName: FirstPerson
   audioListener: {fileID: 5827704354076846068}
+--- !u!114 &7217970640289793155
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2751027687307977091}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efaeca0c3c0274d41a6156f57e84b16a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerScore
+  ShowTopMostFoldoutHeaderGroup: 1
+  pointsPerKill: 100
+  Kills:
+    m_InternalValue: 0
+  Score:
+    m_InternalValue: 0
+  OnScoreChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnKillsChanged:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &6907939308367491131
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2751027687307977091}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 010603d9ea84d47499cd6e51f8260cdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerName
+  ShowTopMostFoldoutHeaderGroup: 1
+  netName:
+    m_InternalValue:
+      utf8LengthInBytes: 6
+      bytes:
+        offset0000:
+          byte0000: 80
+          byte0001: 108
+          byte0002: 97
+          byte0003: 121
+          byte0004: 101
+          byte0005: 114
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0016: 0
+        byte0017: 0
+        byte0018: 0
+        byte0019: 0
+        byte0020: 0
+        byte0021: 0
+        byte0022: 0
+        byte0023: 0
+        byte0024: 0
+        byte0025: 0
+        byte0026: 0
+        byte0027: 0
+        byte0028: 0
+        byte0029: 0
 --- !u!1 &2906013363015915789
 GameObject:
   m_ObjectHideFlags: 0
