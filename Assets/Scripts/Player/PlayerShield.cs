@@ -9,36 +9,28 @@ public class PlayerShield : NetworkBehaviour
 
     [Header("Referências Visuais")]
     [SerializeField] private GameObject shieldVisual;
-    [Tooltip("Arrasta aqui o prefab 'VFX_Pulse' que criaste")]
-    [SerializeField] private GameObject pulseVfxPrefab; // <-- NOVO
-
-    [Header("UI (Automático via Tag 'ShieldText')")]
+    [SerializeField] private GameObject pulseVfxPrefab;
     private TextMeshProUGUI shieldTextUI;
 
-    [Header("Modo Escudo")]
+    [Header("Configurações")]
     [SerializeField] private ShieldMode shieldMode = ShieldMode.Capacity;
+    [SerializeField] private float shieldCapacity = 50f;
+    [SerializeField] private float shieldDuration = 5.0f;
+    [SerializeField] private float shieldCooldown = 10.0f;
 
-    [Header("Configurações Escudo")]
-    [SerializeField] private float shieldCapacity = 100f;
-    [SerializeField] private float shieldDuration = 2.0f;
-    [SerializeField] private float shieldCooldown = 30.0f;
-
-    [Header("Configurações Pulso")]
     [SerializeField] private float pulseDamage = 40f;
-    [SerializeField] private float pulseRadius = 4.0f;
-    [SerializeField] private float pulseCastTime = 1.5f;
-    [SerializeField] private float pulseCooldown = 45.0f;
+    [SerializeField] private float pulseRadius = 8.0f;
+    [SerializeField] private float pulseCastTime = 0.5f;
+    [SerializeField] private float pulseCooldown = 15.0f;
 
-    // --- NetworkVariables ---
+    // Network Variables
     public NetworkVariable<bool> IsShieldActive = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    public NetworkVariable<double> NextShieldReadyTime = new NetworkVariable<double>(0.0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<float> ShieldHealth = new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-
-    public NetworkVariable<double> NextPulseReadyTime = new NetworkVariable<double>(0.0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<double> NextShieldReadyTime = new NetworkVariable<double>(0.0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<bool> IsPulseCasting = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<double> NextPulseReadyTime = new NetworkVariable<double>(0.0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private Health health;
-    private Coroutine pulseCastCoroutine;
 
     void Awake()
     {
@@ -58,125 +50,136 @@ public class PlayerShield : NetworkBehaviour
         {
             GameObject uiObj = GameObject.FindGameObjectWithTag("ShieldText");
             if (uiObj != null) shieldTextUI = uiObj.GetComponent<TextMeshProUGUI>();
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(1f);
         }
         shieldTextUI.text = "";
     }
 
     void Update()
     {
+        // Sincronia Visual
         if (shieldVisual != null && shieldVisual.activeSelf != IsShieldActive.Value)
-        {
             shieldVisual.SetActive(IsShieldActive.Value);
-        }
 
-        if (IsOwner && shieldTextUI != null)
+        // --- LÓGICA DO DONO (INPUT) ---
+        if (IsOwner)
         {
-            if (IsShieldActive.Value)
-                shieldTextUI.text = (shieldMode == ShieldMode.Capacity) ? $"SHIELD: {ShieldHealth.Value:0}" : "SHIELD: ACTIVE";
-            else if (IsPulseCasting.Value) // <-- NOVO: Mostra na UI que estamos a carregar o pulso
-                shieldTextUI.text = "CHARGING PULSE...";
-            else
-                shieldTextUI.text = "";
+            UpdateUI();
+            HandleInput();
         }
     }
 
-    public override void OnNetworkDespawn()
+    private void HandleInput()
     {
-        if (shieldVisual && shieldVisual.activeSelf) shieldVisual.SetActive(false);
-        if (IsOwner && shieldTextUI != null) shieldTextUI.text = "";
-        base.OnNetworkDespawn();
+        // Segurança: Se estiver pausado ou morto, sai
+        if (PauseMenuManager.IsPaused) return;
+        if (health != null && health.isDead.Value) return;
+
+        // Usa o GameInput para ler as teclas
+        if (GameInput.LocalInput != null)
+        {
+            if (GameInput.LocalInput.ShieldTriggered())
+            {
+                RequestShieldServerRpc();
+            }
+
+            if (GameInput.LocalInput.PulseTriggered())
+            {
+                RequestPulseServerRpc();
+            }
+        }
     }
 
-    // ==================== LÓGICA SERVER ====================
+    private void UpdateUI()
+    {
+        if (shieldTextUI == null) return;
+        double now = NetworkManager.Singleton.LocalTime.Time;
 
+        if (IsShieldActive.Value)
+        {
+            shieldTextUI.text = $"ESCUDO: {ShieldHealth.Value:0}";
+            shieldTextUI.color = Color.cyan;
+        }
+        else if (IsPulseCasting.Value)
+        {
+            shieldTextUI.text = "A CARREGAR...";
+            shieldTextUI.color = Color.yellow;
+        }
+        else
+        {
+            string msg = "";
+            if (now < NextShieldReadyTime.Value) msg += $"Escudo: {(NextShieldReadyTime.Value - now):0.0}s  ";
+            else msg += "Escudo: PRONTO (Z)  ";
+
+            if (now < NextPulseReadyTime.Value) msg += $"Pulso: {(NextPulseReadyTime.Value - now):0.0}s";
+            else msg += "Pulso: PRONTO (X)";
+
+            shieldTextUI.text = msg;
+            shieldTextUI.color = Color.white;
+        }
+    }
+
+    // --- RPCs (Mantêm-se iguais) ---
     [ServerRpc]
     public void RequestShieldServerRpc()
     {
         double now = NetworkManager.LocalTime.Time;
         if (now < NextShieldReadyTime.Value || IsShieldActive.Value) return;
-        if (health != null && health.isDead.Value) return;
-
-        NextShieldReadyTime.Value = now + shieldCooldown;
+        
         IsShieldActive.Value = true;
-
-        if (shieldMode == ShieldMode.Capacity) ShieldHealth.Value = shieldCapacity;
-        else { ShieldHealth.Value = 0; StartCoroutine(ShieldActiveTimerServer()); }
+        NextShieldReadyTime.Value = now + shieldCooldown;
+        ShieldHealth.Value = (shieldMode == ShieldMode.Capacity) ? shieldCapacity : 1000f;
+        
+        if (shieldMode == ShieldMode.Duration) StartCoroutine(ShieldTimer());
     }
 
-    private IEnumerator ShieldActiveTimerServer()
+    IEnumerator ShieldTimer()
     {
         yield return new WaitForSeconds(shieldDuration);
-        if (IsShieldActive.Value) DeactivateShieldServer();
+        if (IsShieldActive.Value) { IsShieldActive.Value = false; ShieldHealth.Value = 0; }
     }
 
-    private void DeactivateShieldServer()
+    public float AbsorbDamageServer(float incoming)
     {
-        IsShieldActive.Value = false;
-        ShieldHealth.Value = 0;
-    }
-
-    public float AbsorbDamageServer(float incomingDamage)
-    {
-        if (!IsServer || !IsShieldActive.Value) return incomingDamage;
+        if (!IsServer || !IsShieldActive.Value) return incoming;
         if (shieldMode == ShieldMode.Duration) return 0f;
-        if (shieldMode == ShieldMode.Capacity)
-        {
-            float absorbed = Mathf.Min(ShieldHealth.Value, incomingDamage);
-            ShieldHealth.Value -= absorbed;
-            if (ShieldHealth.Value <= 0) DeactivateShieldServer();
-            return incomingDamage - absorbed;
-        }
-        return incomingDamage;
+
+        float absorbed = Mathf.Min(ShieldHealth.Value, incoming);
+        ShieldHealth.Value -= absorbed;
+        if (ShieldHealth.Value <= 0) { IsShieldActive.Value = false; ShieldHealth.Value = 0; }
+        return incoming - absorbed;
     }
 
     [ServerRpc]
     public void RequestPulseServerRpc()
     {
-        if (health == null || health.isDead.Value) return;
         double now = NetworkManager.LocalTime.Time;
         if (now < NextPulseReadyTime.Value || IsPulseCasting.Value) return;
-        pulseCastCoroutine = StartCoroutine(PulseCastAndExecuteServer());
+        StartCoroutine(PulseRoutine());
     }
 
-    private IEnumerator PulseCastAndExecuteServer()
+    IEnumerator PulseRoutine()
     {
         IsPulseCasting.Value = true;
         yield return new WaitForSeconds(pulseCastTime);
-        if (health == null || health.isDead.Value) { IsPulseCasting.Value = false; yield break; }
         
-        ExecutePulseServer();
+        if (health && !health.isDead.Value)
+        {
+            PlayVfxClientRpc(transform.position);
+            Collider[] hits = Physics.OverlapSphere(transform.position, pulseRadius);
+            int myTeam = health.team.Value;
+            foreach (var c in hits)
+            {
+                if (c.transform.root == transform.root) continue;
+                var h = c.GetComponentInParent<Health>();
+                if (h) h.ApplyDamageServer(pulseDamage, myTeam, OwnerClientId, transform.position, true);
+            }
+        }
         
-        // --- NOVO: Manda o servidor avisar todos os clientes para tocarem o VFX ---
-        PlayPulseVfxClientRpc(transform.position);
-
         IsPulseCasting.Value = false;
         NextPulseReadyTime.Value = NetworkManager.LocalTime.Time + pulseCooldown;
     }
 
-    private void ExecutePulseServer()
-    {
-        Vector3 center = transform.position;
-        Collider[] hits = Physics.OverlapSphere(center, pulseRadius);
-        foreach (var col in hits)
-        {
-            if (!col) continue;
-            Health tHealth = col.GetComponentInParent<Health>();
-            if (tHealth && tHealth.transform.root != transform.root)
-            {
-                tHealth.ApplyDamageServer(pulseDamage, health.team.Value, OwnerClientId, center, true);
-            }
-        }
-    }
-
-    // --- NOVO: ClientRpc para visuais ---
     [ClientRpc]
-    private void PlayPulseVfxClientRpc(Vector3 position)
-    {
-        // Cria o efeito visual na posição onde o pulso ocorreu
-        if (pulseVfxPrefab != null)
-        {
-            Instantiate(pulseVfxPrefab, position, Quaternion.identity);
-        }
-    }
+    void PlayVfxClientRpc(Vector3 p) { if (pulseVfxPrefab) Instantiate(pulseVfxPrefab, p, Quaternion.identity); }
 }
