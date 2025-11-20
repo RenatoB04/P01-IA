@@ -1513,7 +1513,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerShield
   ShowTopMostFoldoutHeaderGroup: 1
-  shieldVisual: {fileID: 8561603377074911853, guid: 5da9a6034f20c3c48bf6f8df09321de6, type: 3}
+  shieldVisual: {fileID: 8258649534756429985}
   pulseVfxPrefab: {fileID: 6608167148170694059, guid: 47db5b5625b2aa141b0b9d6add0d426f, type: 3}
   shieldMode: 0
   shieldCapacity: 100
@@ -3939,8 +3939,12 @@ PrefabInstance:
       value: VisualShield
       objectReference: {fileID: 0}
     - target: {fileID: 8561603377074911853, guid: 5da9a6034f20c3c48bf6f8df09321de6, type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8561603377074911853, guid: 5da9a6034f20c3c48bf6f8df09321de6, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3950,6 +3954,11 @@ PrefabInstance:
 --- !u!4 &3930993793536419913 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3657418851186864773, guid: 5da9a6034f20c3c48bf6f8df09321de6, type: 3}
+  m_PrefabInstance: {fileID: 309746814185085644}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &8258649534756429985 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8561603377074911853, guid: 5da9a6034f20c3c48bf6f8df09321de6, type: 3}
   m_PrefabInstance: {fileID: 309746814185085644}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &4266409946453940429
