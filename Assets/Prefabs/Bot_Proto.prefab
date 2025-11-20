@@ -44,11 +44,12 @@ GameObject:
   - component: {fileID: 3993001359691814887}
   - component: {fileID: 4820995970386180271}
   - component: {fileID: 3353205525096065713}
-  - component: {fileID: -6465962347971376533}
   - component: {fileID: 6580659386542663713}
+  - component: {fileID: -6465962347971376533}
   - component: {fileID: 5528176311267628620}
   - component: {fileID: -5785216237079057797}
   - component: {fileID: -9100149406634143210}
+  - component: {fileID: -1163729500855450927}
   m_Layer: 8
   m_Name: Bot_Proto
   m_TagString: Untagged
@@ -173,44 +174,6 @@ NavMeshAgent:
   m_BaseOffset: 1
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
---- !u!114 &-6465962347971376533
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7703748112432588966}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7afca9c43f9cbfa498a4945fdc2ed92f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BotAI_Proto
-  currentState: 0
-  debugLogs: 0
-  eyes: {fileID: 1289090125734755637}
-  animator: {fileID: 5117189200338216783}
-  healthSource: {fileID: 5528176311267628620}
-  healthCurrentField: currentHealth
-  healthMaxField: maxHealth
-  combat: {fileID: 1653744476392996182}
-  patrolPoints: []
-  waypointTolerance: 0.6
-  patrolRepathInterval: 0.25
-  healthPickups: []
-  ammoPickups: []
-  playerTag: Player
-  obstacleMask:
-    serializedVersion: 2
-    m_Bits: 128
-  viewRadius: 40
-  maxSearchTime: 10
-  idealCombatDistance: 10
-  tooCloseDistance: 4
-  giveUpDistance: 120
-  lowHealthThreshold: 0.2
-  lowAmmoThreshold: 0.2
-  retreatSpeedMultiplier: 1.5
-  alertRadius: 25
 --- !u!114 &6580659386542663713
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -236,6 +199,44 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &-6465962347971376533
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7703748112432588966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7afca9c43f9cbfa498a4945fdc2ed92f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BotAI_Proto
+  ShowTopMostFoldoutHeaderGroup: 1
+  currentState: 0
+  debugLogs: 0
+  eyes: {fileID: 1289090125734755637}
+  animator: {fileID: 5117189200338216783}
+  combat: {fileID: 1653744476392996182}
+  healthSource: {fileID: 5528176311267628620}
+  healthCurrentField: currentHealth
+  healthMaxField: maxHealth
+  patrolPoints: []
+  waypointTolerance: 0.6
+  healthPickups: []
+  ammoPickups: []
+  playerTag: Player
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 128
+  viewRadius: 40
+  maxSearchTime: 10
+  idealCombatDistance: 10
+  tooCloseDistance: 4
+  giveUpDistance: 120
+  lowHealthThreshold: 0.2
+  lowAmmoThreshold: 0.2
+  retreatSpeedMultiplier: 1.5
+  alertRadius: 25
 --- !u!114 &5528176311267628620
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -295,6 +296,43 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BotDiagnostics
   verbose: 1
+--- !u!114 &-1163729500855450927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7703748112432588966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 399cc19db4b85e74987b11213e07ad9e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BotCombat
+  ShowTopMostFoldoutHeaderGroup: 1
+  shootPoint: {fileID: 0}
+  eyes: {fileID: 4217968751053340756}
+  playerTag: Player
+  playerLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  bulletPrefab: {fileID: 7869800553090129627, guid: 3a1c71fa6ce298a429a701782403710f, type: 3}
+  bulletSpeed: 40
+  aimInaccuracy: 1.5
+  rifleMagSize: 30
+  rifleReserveAmmo: 90
+  rifleFireRate: 6
+  rifleReloadTime: 2
+  rifleDamage: 5
+  pistolMagSize: 12
+  pistolReserveAmmo: 48
+  pistolFireRate: 2
+  pistolReloadTime: 1.5
+  pistolDamage: 8
+  maxShootDistance: 200
+  drawDebugRays: 0
 --- !u!1 &8642664510083840097
 GameObject:
   m_ObjectHideFlags: 0
@@ -443,6 +481,7 @@ MonoBehaviour:
     m_Bits: 0
   bulletPrefab: {fileID: 7869800553090129627, guid: 3a1c71fa6ce298a429a701782403710f, type: 3}
   bulletSpeed: 40
+  aimInaccuracy: 1.5
   rifleMagSize: 30
   rifleReserveAmmo: 90
   rifleFireRate: 10

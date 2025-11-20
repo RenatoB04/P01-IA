@@ -41443,10 +41443,11 @@ MonoBehaviour:
   - {fileID: 1379249718}
   - {fileID: 748023029}
   - {fileID: 1371149829}
-  count: 1
+  initialBotCount: 2
   maxAliveBots: 10
-  roundDuration: 180
   respawnDelay: 5
+  enableInMultiplayer: 1
+  forceSpawnInEditor: 1
 --- !u!4 &1253390929
 Transform:
   m_ObjectHideFlags: 0

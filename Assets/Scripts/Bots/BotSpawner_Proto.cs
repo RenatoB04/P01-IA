@@ -1,188 +1,147 @@
 using UnityEngine;
 using System.Collections;
-using Unity.Netcode; // <-- ADICIONADO
+using Unity.Netcode;
 
 public class BotSpawner_Proto : MonoBehaviour
 {
-    [Header("Configuração Inicial")]
+    [Header("Configuração")]
+    [Tooltip("O Prefab do Bot (TEM de estar na lista NetworkPrefabs do NetworkManager!).")]
     public GameObject botPrefab;
+    
+    [Tooltip("Pontos onde os bots podem nascer.")]
     public Transform[] spawnPoints;
 
-    [Tooltip("Waypoints de patrulha que o bot vai usar (podes meter vários paths aqui).")]
+    [Tooltip("Caminho de patrulha para os bots.")]
     public Transform[] patrolWaypoints;
 
-    [Tooltip("Bots que nascem no início da ronda.")]
-    public int count = 3;
-
-    [Header("Limites / Ronda")]
-    [Tooltip("Máximo de bots vivos em simultâneo.")]
+    [Header("Regras da Horda")]
+    public int initialBotCount = 2;
     public int maxAliveBots = 10;
+    public float respawnDelay = 3f;
+    
+    [Header("Multiplayer")]
+    [Tooltip("Se false, os bots só aparecem no modo Offline. Se true, aparecem também no Multiplayer.")]
+    public bool enableInMultiplayer = true;
 
-    [Tooltip("Duração da ronda em segundos (3 min = 180).")]
-    public float roundDuration = 180f;
+    [Header("Debug")]
+    public bool forceSpawnInEditor = true;
 
-    [Header("Respawn")]
-    [Tooltip("Segundos a aguardar após a morte antes de nascerem bots novos.")]
-    public float respawnDelay = 2f;
+    private int currentAliveBots = 0;
+    private bool isSpawningActive = false;
 
-    int nextSpawnIndex = 0;
-    int spawnedTotal = 0;
-    int aliveBots = 0;
-
-    float roundTimer = 0f;
-    bool roundActive = false;
-
-    // ------------------------------------------------------------
-    // Ciclo de vida
-    // ------------------------------------------------------------
+    // Ciclo de Vida
     void Awake()
     {
-        // Só queremos bots quando viemos do botão "Jogar com Bots"
-        if (PlayerPrefs.GetInt("OfflineMode", 0) != 1)
+        // Se NÃO forçarmos no editor E a flag "OfflineMode" não estiver ativa, desliga-se.
+        if (!forceSpawnInEditor && PlayerPrefs.GetInt("OfflineMode", 0) != 1)
         {
-            enabled = false;
+            // Mas se estivermos num build multiplayer, queremos que continue a tentar
+            // Por isso não desativamos já, deixamos o Start decidir com o Netcode.
         }
-    }
-
-    void OnEnable()
-    {
-        // Escuta mortes globais dos bots
-        BOTDeath.OnAnyBotKilled -= HandleAnyBotKilled;
-        BOTDeath.OnAnyBotKilled += HandleAnyBotKilled;
-    }
-
-    void OnDisable()
-    {
-        BOTDeath.OnAnyBotKilled -= HandleAnyBotKilled;
     }
 
     void Start()
     {
-        if (!enabled) return;
+        StartCoroutine(WaitForServer());
+    }
 
-        // Só o Servidor/Host pode spawnar
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+    IEnumerator WaitForServer()
+    {
+        // Espera até o Netcode arrancar
+        yield return new WaitUntil(() => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening);
+
+        // Só o Servidor (Host Offline ou Host Online) pode spawnar
+        if (NetworkManager.Singleton.IsServer)
         {
-            Debug.LogWarning("[BotSpawner_Proto] Desativado (só o Host/Server pode spawnar bots).");
+            // Verificação extra para não spawnar em MP se não quisermos
+            bool isOfflineMode = PlayerPrefs.GetInt("OfflineMode", 0) == 1;
+            
+            if (!isOfflineMode && !enableInMultiplayer && !forceSpawnInEditor)
+            {
+                Debug.Log("[BotSpawner] Desativado (Modo Online e enableInMultiplayer=false).");
+                enabled = false;
+                yield break;
+            }
+
+            Debug.Log("[BotSpawner] SOU O HOST. A iniciar ronda de bots...");
+            isSpawningActive = true;
+            
+            // Subscrever mortes
+            BOTDeath.OnAnyBotKilled += HandleBotDeath;
+
+            // Spawn Inicial
+            for (int i = 0; i < initialBotCount; i++)
+            {
+                SpawnBot();
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+        else
+        {
+            // Sou Cliente, fico quieto
             enabled = false;
-            return;
-        }
-
-        if (botPrefab == null || spawnPoints == null || spawnPoints.Length == 0)
-        {
-            Debug.LogError("[BotSpawner_Proto] Configura botPrefab e spawnPoints.");
-            return;
-        }
-
-        roundActive = true;
-        roundTimer = roundDuration;
-
-        SpawnInitialBots();
-    }
-
-    void Update()
-    {
-        // ADICIONADO: Pára o update se o Netcode não estiver pronto
-        if (NetworkManager.Singleton == null) return;
-
-        if (!roundActive || !NetworkManager.Singleton.IsServer) return;
-
-        roundTimer -= Time.deltaTime;
-        if (roundTimer <= 0f)
-        {
-            roundActive = false;
-            Debug.Log("[BotSpawner_Proto] Ronda terminou. Não há mais respawns.");
         }
     }
-    // ------------------------------------------------------------
-    // Spawn inicial
-    // ------------------------------------------------------------
-    void SpawnInitialBots()
+
+    void OnDestroy()
     {
-        int toSpawn = Mathf.Min(count, maxAliveBots);
-
-        for (int i = 0; i < toSpawn; i++)
-        {
-            SpawnOne();
-        }
-
-        Debug.Log($"[BotSpawner_Proto] Spawn inicial de {toSpawn} bots.");
+        BOTDeath.OnAnyBotKilled -= HandleBotDeath;
     }
 
-    // ------------------------------------------------------------
-    // Spawn unitário (injeção de waypoints) - MODIFICADO
-    // ------------------------------------------------------------
-    void SpawnOne()
+    // --- Lógica HIDRA: Matas 1, Nascem 2 ---
+    void HandleBotDeath()
     {
-        if (!roundActive) return;
-        if (aliveBots >= maxAliveBots) return;
+        if (!isSpawningActive) return;
+
+        currentAliveBots--;
+        if (currentAliveBots < 0) currentAliveBots = 0;
+
+        StartCoroutine(SpawnRoutine(2));
+    }
+
+    IEnumerator SpawnRoutine(int amount)
+    {
+        yield return new WaitForSeconds(respawnDelay);
+
+        for (int i = 0; i < amount; i++)
+        {
+            if (currentAliveBots < maxAliveBots)
+            {
+                SpawnBot();
+                yield return new WaitForSeconds(1f);
+            }
+        }
+    }
+
+    void SpawnBot()
+    {
         if (botPrefab == null || spawnPoints == null || spawnPoints.Length == 0) return;
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return; // Segurança extra
+        if (!NetworkManager.Singleton.IsServer) return;
 
-        var spawnPoint = spawnPoints[nextSpawnIndex % spawnPoints.Length];
-        nextSpawnIndex++;
-
-        // --- MODIFICADO: Usa Instantiate e depois Spawn ---
-        var bot = Instantiate(botPrefab, spawnPoint.position, spawnPoint.rotation);
-
-        spawnedTotal++;
-        aliveBots++;
-        bot.name = $"Bot_{spawnedTotal}";
-
-        // Dá os waypoints ao BotAI_Proto
+        // Escolhe posição aleatória
+        Transform sp = spawnPoints[Random.Range(0, spawnPoints.Length)];
+        
+        // Instancia
+        GameObject bot = Instantiate(botPrefab, sp.position, sp.rotation);
+        
+        // Configura IA
         var ai = bot.GetComponent<BotAI_Proto>();
-        if (ai != null)
-        {
-            ai.patrolPoints = patrolWaypoints;
-        }
+        if (ai != null) ai.patrolPoints = patrolWaypoints;
 
-        // Torna o bot "real" na rede
+        // SPAWN NA REDE
         var netObj = bot.GetComponent<NetworkObject>();
         if (netObj != null)
         {
             netObj.Spawn(true);
+            currentAliveBots++;
         }
         else
         {
-            Debug.LogError($"[BotSpawner_Proto] botPrefab '{botPrefab.name}' não tem um NetworkObject!");
+            Debug.LogError("[BotSpawner] O Bot Prefab não tem NetworkObject!");
             Destroy(bot);
-            aliveBots--;
         }
     }
-
-    // ------------------------------------------------------------
-    // Chamado sempre que QUALQUER bot morre (BOTDeath.OnAnyBotKilled)
-    // ------------------------------------------------------------
-    void HandleAnyBotKilled()
-    {
-        if (!roundActive || !NetworkManager.Singleton.IsServer) return;
-
-        // Um bot a menos
-        aliveBots = Mathf.Max(0, aliveBots - 1);
-
-        // Regra: matas 1, nascem 2 (se houver espaço e tempo de ronda)
-        StartCoroutine(RespawnRoutine());
-        StartCoroutine(RespawnRoutine());
-    }
-
-    // ------------------------------------------------------------
-    // Coroutine de respawn (um bot por chamada)
-    // ------------------------------------------------------------
-    IEnumerator RespawnRoutine()
-    {
-        if (!roundActive || !NetworkManager.Singleton.IsServer) yield break;
-
-        if (respawnDelay > 0f)
-            yield return new WaitForSeconds(respawnDelay);
-
-        SpawnOne();
-    }
-
-    // ------------------------------------------------------------
-    // Mantido só para compatibilidade com BotRespawnLink
-    // ------------------------------------------------------------
-    public void ScheduleRespawn(Transform[] waypointsFromDead)
-    {
-        // Intencionalmente vazio.
-    }
+    
+    // Compatibilidade com scripts antigos
+    public void ScheduleRespawn(Transform[] t) { }
 }
