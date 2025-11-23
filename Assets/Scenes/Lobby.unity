@@ -2122,6 +2122,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: btnOffline
       objectReference: {fileID: 0}
+    - target: {fileID: 5230826317255391481, guid: 8a1c7b8eddbf02a4393601bd1e08f53d, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3365,7 +3369,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 206605750}
   m_Direction: 2
   m_Value: 1
-  m_Size: 0.6100001
+  m_Size: 0.61
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:

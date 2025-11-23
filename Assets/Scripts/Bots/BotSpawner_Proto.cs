@@ -16,7 +16,7 @@ public class BotSpawner_Proto : MonoBehaviour
 
     [Header("Regras da Horda")]
     public int initialBotCount = 2;
-    public int maxAliveBots = 10;
+    public int maxAliveBots = 5;
     public float respawnDelay = 3f;
     
     [Header("Multiplayer")]

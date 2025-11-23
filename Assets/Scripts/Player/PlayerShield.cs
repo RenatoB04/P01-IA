@@ -108,11 +108,23 @@ public class PlayerShield : NetworkBehaviour
         else
         {
             string msg = "";
-            if (now < NextShieldReadyTime.Value) msg += $"Escudo: {(NextShieldReadyTime.Value - now):0.0}s  ";
-            else msg += "Escudo: PRONTO (Z)  ";
+        
+            // --- 1. STATUS DO ESCUDO ---
+            if (now < NextShieldReadyTime.Value) 
+                // Removido o espaço duplo no final
+                msg += $"Escudo: {(NextShieldReadyTime.Value - now):0.0}s"; 
+            else 
+                // Removido o espaço duplo no final
+                msg += "Escudo: PRONTO (Z)";
 
-            if (now < NextPulseReadyTime.Value) msg += $"Pulso: {(NextPulseReadyTime.Value - now):0.0}s";
-            else msg += "Pulso: PRONTO (X)";
+            // --- 2. QUEBRA DE LINHA PARA SEPARAR OS ITENS ---
+            msg += "\n"; 
+
+            // --- 3. STATUS DO PULSO ---
+            if (now < NextPulseReadyTime.Value) 
+                msg += $"Pulso: {(NextPulseReadyTime.Value - now):0.0}s";
+            else 
+                msg += "Pulso: PRONTO (X)";
 
             shieldTextUI.text = msg;
             shieldTextUI.color = Color.white;

@@ -481,12 +481,12 @@ MonoBehaviour:
     m_Bits: 0
   bulletPrefab: {fileID: 7869800553090129627, guid: 3a1c71fa6ce298a429a701782403710f, type: 3}
   bulletSpeed: 40
-  aimInaccuracy: 1.5
+  aimInaccuracy: 2
   rifleMagSize: 30
   rifleReserveAmmo: 90
   rifleFireRate: 10
   rifleReloadTime: 1.5
-  rifleDamage: 20
+  rifleDamage: 10
   pistolMagSize: 12
   pistolReserveAmmo: 48
   pistolFireRate: 3
@@ -533,11 +533,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3990662563956255723, guid: cd7c5b7b1dd9cd945927f3341dcc20a9, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -1.59
       objectReference: {fileID: 0}
     - target: {fileID: 3990662563956255723, guid: cd7c5b7b1dd9cd945927f3341dcc20a9, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: 1.52
       objectReference: {fileID: 0}
     - target: {fileID: 3990662563956255723, guid: cd7c5b7b1dd9cd945927f3341dcc20a9, type: 3}
       propertyPath: m_LocalRotation.w
