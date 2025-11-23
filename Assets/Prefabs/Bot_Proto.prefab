@@ -319,8 +319,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   bulletPrefab: {fileID: 7869800553090129627, guid: 3a1c71fa6ce298a429a701782403710f, type: 3}
-  bulletSpeed: 40
-  aimInaccuracy: 1.5
+  bulletSpeed: 35
+  aimInaccuracy: 1.6
   rifleMagSize: 30
   rifleReserveAmmo: 90
   rifleFireRate: 6
@@ -331,7 +331,7 @@ MonoBehaviour:
   pistolFireRate: 2
   pistolReloadTime: 1.5
   pistolDamage: 8
-  maxShootDistance: 200
+  maxShootDistance: 100
   drawDebugRays: 0
 --- !u!1 &8642664510083840097
 GameObject:
