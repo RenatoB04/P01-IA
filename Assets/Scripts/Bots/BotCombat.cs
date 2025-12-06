@@ -38,6 +38,11 @@ public class BotCombat : NetworkBehaviour
     public float maxShootDistance = 200f;
     public bool drawDebugRays = false;
 
+    [Header("Dificuldade - Previsão")]
+    [Tooltip("0 = Não prevê movimento. 1 = Prevê movimento perfeito.")]
+    [Range(0f, 1f)]
+    public float leadAccuracy = 1.0f;
+
     public float AmmoNormalized
     {
         get
@@ -113,27 +118,42 @@ public class BotCombat : NetworkBehaviour
         EnsureUsableWeapon();
 
         if (GetCurrentMag() <= 0 && GetCurrentReserve() <= 0) return;
-        
+
         if (GetCurrentMag() <= 0 && GetCurrentReserve() > 0)
         {
             StartReload();
             return;
         }
 
-        // --- CÁLCULO DA MIRA COM ERRO (NERF) ---
         Vector3 origin = shootPoint ? shootPoint.position : eyes.position;
-        
-        // Ponto ideal (Cabeça/Peito)
-        Vector3 perfectTargetPos = currentTarget.position + Vector3.up * 1.2f;
 
-        // Adicionar "Tremideira" aleatória baseada na distância
-        float dist = Vector3.Distance(origin, perfectTargetPos);
-        // O erro aumenta ligeiramente com a distância para não serem snipers a 100m
-        float currentInaccuracy = aimInaccuracy + (dist * 0.01f); 
-        
+        // --- CÁLCULO DO LEAD (Previsão) ---
+        Vector3 targetVelocity = Vector3.zero;
+
+        // Tenta obter a velocidade do Rigidbody ou CharacterController do alvo
+        var targetRb = currentTarget.GetComponent<Rigidbody>();
+        if (targetRb) targetVelocity = targetRb.linearVelocity; // Unity 6 usa linearVelocity, Unity antigo usa velocity
+        else
+        {
+            var cc = currentTarget.GetComponent<CharacterController>();
+            if (cc) targetVelocity = cc.velocity;
+        }
+
+        float dist = Vector3.Distance(origin, currentTarget.position);
+        float timeToHit = dist / bulletSpeed; // Tempo que a bala demora a chegar
+
+        // Posição futura prevista (com fator de ajuste leadAccuracy)
+        Vector3 futurePos = currentTarget.position + (targetVelocity * timeToHit * leadAccuracy);
+
+        // Ponto ideal (Cabeça/Peito) na posição futura
+        Vector3 perfectTargetPos = futurePos + Vector3.up * 1.2f;
+
+        // --- CÁLCULO DO SPREAD (Espalhamento/Erro) ---
+        // O erro aumenta com a distância
+        float currentInaccuracy = aimInaccuracy + (dist * 0.01f);
         Vector3 errorOffset = Random.insideUnitSphere * currentInaccuracy;
-        
-        // Ponto final com erro
+
+        // Ponto final com Lead + Spread
         Vector3 noisyTargetPos = perfectTargetPos + errorOffset;
         Vector3 dir = (noisyTargetPos - origin).normalized;
 
@@ -141,13 +161,14 @@ public class BotCombat : NetworkBehaviour
         Vector3 flatDir = new Vector3(dir.x, 0f, dir.z);
         if (flatDir.sqrMagnitude > 0.001f)
         {
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flatDir), Time.deltaTime * 8f); // Rotação mais suave (8f)
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flatDir), Time.deltaTime * 8f);
         }
 
-        if (drawDebugRays) 
+        if (drawDebugRays)
         {
-            Debug.DrawLine(origin, perfectTargetPos, Color.green, 0.1f); // Mira ideal
-            Debug.DrawRay(origin, dir * maxShootDistance, Color.red, 0.1f); // Tiro real (torto)
+            Debug.DrawLine(origin, currentTarget.position, Color.yellow, 0.1f); // Onde ele está
+            Debug.DrawLine(origin, perfectTargetPos, Color.green, 0.1f);      // Onde vai estar (Lead)
+            Debug.DrawRay(origin, dir * maxShootDistance, Color.red, 0.1f);   // Tiro real (Lead + Spread)
         }
 
         // --- DISPARAR (NETCODE) ---
@@ -162,9 +183,9 @@ public class BotCombat : NetworkBehaviour
             if (bp && rb && netObj)
             {
                 bp.damage = (currentWeapon == WeaponSlot.Rifle) ? rifleDamage : pistolDamage;
-                bp.ownerTeam = -2; 
-                bp.ownerRoot = transform.root; 
-                bp.ownerClientId = ulong.MaxValue; 
+                bp.ownerTeam = -2;
+                bp.ownerRoot = transform.root;
+                bp.ownerClientId = ulong.MaxValue;
 
                 rb.linearVelocity = dir * bulletSpeed;
                 bp.initialVelocity.Value = rb.linearVelocity;
