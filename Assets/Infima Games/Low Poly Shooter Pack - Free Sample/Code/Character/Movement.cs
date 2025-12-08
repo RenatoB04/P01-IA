@@ -35,11 +35,10 @@ namespace InfimaGames.LowPolyShooterPack
         [Tooltip("Input Action do salto (por ex., bound à tecla Space).")]
         [SerializeField] private InputActionReference jumpAction;
         
-        [Header("Network Ref")] // ADIÇÃO
+        [Header("Network Ref")] 
         [Tooltip("Referência ao script Character (Controller de Rede).")]
-        public Character characterNetcode; // ADIÇÃO
+        public Character characterNetcode;
 
-        // === ADIÇÃO: REFERÊNCIA AO SCRIPT DE ESTADO ===
         [Tooltip("Referência ao script que gere a morte/respawn.")]
         [SerializeField] private PlayerDeathAndRespawn deathStateController;
 
@@ -47,7 +46,6 @@ namespace InfimaGames.LowPolyShooterPack
 
         #region PROPERTIES
 
-        // Velocity (Unity 6 usa linearVelocity).
         private Vector3 Velocity
         {
             get => rigidBody.linearVelocity;
@@ -62,21 +60,22 @@ namespace InfimaGames.LowPolyShooterPack
         private CapsuleCollider capsule;
         private AudioSource audioSource;
 
-        /// <summary>True se o character está no chão.</summary>
         private bool grounded;
 
-        /// <summary>Character (controlador principal).</summary>
         private Character playerCharacter;
 
         private WeaponBehaviour equippedWeapon;
 
-        /// <summary>Raycasts para ground check.</summary>
         private readonly RaycastHit[] groundHits = new RaycastHit[8];
 
-        // Controle de cooldown do salto
         private float nextJumpTime;
         
         private PlayerDeathAndRespawn deathState;
+
+        // MELHORIA: valores para rampas e escadas
+        private float maxSlopeAngle = 55f;
+        private float stepHeight = 0.3f;
+        private float stepSmooth = 0.1f;
 
         #endregion
 
@@ -84,7 +83,6 @@ namespace InfimaGames.LowPolyShooterPack
 
         protected void Awake()
         {
-            // Obter Character localmente se não foi ligado no Inspector
             if (characterNetcode == null)
                 characterNetcode = GetComponent<Character>();
 
@@ -97,10 +95,8 @@ namespace InfimaGames.LowPolyShooterPack
             if (playerCharacter == null)
                 Debug.LogError("Movement: O script 'Character' (Controller de Rede) não foi encontrado.");
 
-            // Ligar evento do salto (Input System)
             if (jumpAction != null)
             {
-                // Garantir que a action está criada/activada
                 if (!jumpAction.action.enabled)
                     jumpAction.action.Enable();
 
@@ -110,7 +106,6 @@ namespace InfimaGames.LowPolyShooterPack
 
         protected void OnDestroy()
         {
-            // Desligar evento do salto
             if (jumpAction != null)
                 jumpAction.action.performed -= OnJumpPerformed;
         }
@@ -120,7 +115,7 @@ namespace InfimaGames.LowPolyShooterPack
             rigidBody = GetComponent<Rigidbody>();
             if (rigidBody != null)
             {
-                rigidBody.useGravity = true;                  // garantir gravidade do Rigidbody
+                rigidBody.useGravity = true;
                 rigidBody.constraints = RigidbodyConstraints.FreezeRotation;
             }
 
@@ -134,9 +129,6 @@ namespace InfimaGames.LowPolyShooterPack
             }
         }
 
-        /// <summary>
-        /// Ground check simples por contacto (mantém grounded enquanto houver colisão abaixo).
-        /// </summary>
         private void OnCollisionStay()
         {
             if (capsule == null) return;
@@ -145,66 +137,50 @@ namespace InfimaGames.LowPolyShooterPack
             Vector3 extents = bounds.extents;
             float radius = extents.x - 0.01f;
 
-            // Cast para baixo a partir do centro do capsule
             Physics.SphereCastNonAlloc(bounds.center, radius, Vector3.down,
                 groundHits, extents.y - radius * 0.5f, ~0, QueryTriggerInteraction.Ignore);
 
-            // grounded se bater em algo que não seja o nosso próprio collider
             if (groundHits.Any(hit => hit.collider != null && hit.collider != capsule))
             {
                 grounded = true;
             }
 
-            // limpar hits
             for (var i = 0; i < groundHits.Length; i++)
                 groundHits[i] = new RaycastHit();
         }
 
         protected void FixedUpdate()
         {
-            // Só o owner controla o movimento
             if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
                 return;
             
             if (!CanMove())
             {
-                // Parar o Rigidbody imediatamente
                 if (rigidBody != null)
                 {
                     Vector3 v = rigidBody.linearVelocity;
-                    rigidBody.linearVelocity = new Vector3(0f, v.y, 0f); // Só permite movimento vertical (queda/salto)
+                    rigidBody.linearVelocity = new Vector3(0f, v.y, 0f);
                 }
                 return;
             }
 
-            if (!CanMove())
-            {
-                // Garante que o som de passos para imediatamente
-                if (audioSource != null && audioSource.isPlaying)
-                    audioSource.Pause();
-                return;
-            }
-            
             MoveCharacter();
+            LedgeAssist();
 
-            // Libertar grounded; será reposto em OnCollisionStay quando tocar no chão
             grounded = false;
-            
-            float gravityMultiplier = 2.0f; // aumenta ou diminui conforme o gosto
+
+            float gravityMultiplier = 2.0f;
             if (!grounded)
             {
-                // aplica gravidade extra apenas enquanto está no ar
                 rigidBody.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
             }
         }
 
         protected void Update()
         {
-            // Só o owner trata de áudio
             if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
                 return;
 
-            // HUD/sons
             equippedWeapon = playerCharacter.GetInventory()?.GetEquipped();
 
             PlayFootstepSounds();
@@ -214,46 +190,96 @@ namespace InfimaGames.LowPolyShooterPack
 
         #region METHODS - MOVEMENT & JUMP
 
+        
+        // MELHORIA: assistência para subir caixas mesmo durante o salto
+        private void LedgeAssist()
+        {
+            if (grounded) return; // só interessa no ar
+
+            float checkDistance = 0.4f;
+            float ledgeHeight = 0.6f;
+            float climbForce = 6.0f;
+
+            // cast frontal para ver se estamos a bater numa caixa ou aresta
+            Vector3 forwardOrigin = transform.position + Vector3.up * (capsule.height * 0.5f);
+            if (Physics.Raycast(forwardOrigin, transform.forward, out RaycastHit hitFront, checkDistance))
+            {
+                // agora verificar se existe topo logo acima
+                Vector3 topCheckOrigin = hitFront.point + Vector3.up * ledgeHeight;
+
+                if (!Physics.Raycast(topCheckOrigin, Vector3.down, out RaycastHit topHit, 1.0f))
+                    return;
+
+                // aplica subida suave
+                Vector3 newPos = rigidBody.position;
+                newPos.y += Time.fixedDeltaTime * climbForce;
+                rigidBody.position = newPos;
+            }
+        }
+        
+        
         private void MoveCharacter()
         {
             if (playerCharacter == null || rigidBody == null) return;
 
-            // Input 2D (x,z) vindo do Character
             Vector2 frameInput = playerCharacter.GetInputMovement();
             var movement = new Vector3(frameInput.x, 0.0f, frameInput.y);
 
-            // Velocidade (walk/run)
             movement *= playerCharacter.IsRunning() ? speedRunning : speedWalking;
-
-            // Para o espaço do mundo, com base na orientação do player
             movement = transform.TransformDirection(movement);
 
-            // PRESERVAR VELOCIDADE VERTICAL!
+            // MELHORIA: assistência de rampas
+            if (grounded && Physics.Raycast(transform.position, Vector3.down, out RaycastHit slopeHit, 1.2f))
+            {
+                float slopeAngle = Vector3.Angle(slopeHit.normal, Vector3.up);
+
+                if (slopeAngle < maxSlopeAngle)
+                {
+                    movement = Vector3.ProjectOnPlane(movement, slopeHit.normal);
+                }
+            }
+
+            // MELHORIA: step climbing (não ficar preso em escadas)
+            StepClimb();
+
             float currentY = rigidBody.linearVelocity.y;
 
-            // Aplicar velocidade de movimento só em XZ
-            Velocity = new Vector3(movement.x, currentY, movement.z);
+            // MELHORIA: mais estável no chão
+            if (grounded)
+                rigidBody.MovePosition(rigidBody.position + movement * Time.fixedDeltaTime);
+            else
+                Velocity = new Vector3(movement.x, currentY, movement.z);
         }
-        
+
+        // MELHORIA - Step Offset funcional
+        private void StepClimb()
+        {
+            Vector3 origin = transform.position + Vector3.up * (stepHeight + 0.1f);
+
+            if (Physics.Raycast(origin, transform.forward, 0.3f))
+            {
+                if (!Physics.Raycast(transform.position + Vector3.up * 0.05f, transform.forward, 0.3f))
+                {
+                    Vector3 targetPos = transform.position + Vector3.up * stepSmooth;
+                    rigidBody.position = Vector3.Lerp(rigidBody.position, targetPos, 0.5f);
+                }
+            }
+        }
+
         private bool CanMove()
         {
-            // Só o owner pode mover
             if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
                 return false;
 
-            // Se o script de estado existir, verifica se o jogador está controlado
             if (deathState != null)
                 return deathState.IsPlayerControlled;
             
-            // Fallback (se o script de estado for nulo)
             return true;
         }
 
         private void OnJumpPerformed(InputAction.CallbackContext ctx)
         {
             if (!CanMove()) return;
-            
-            // Só processa no owner
             if (playerCharacter == null || !playerCharacter.isActiveAndEnabled || !playerCharacter.IsOwner)
                 return;
 
@@ -264,25 +290,18 @@ namespace InfimaGames.LowPolyShooterPack
         {
             if (rigidBody == null) return;
 
-            // cooldown simples
             if (Time.time < nextJumpTime)
                 return;
 
             if (!CanMove()) return;
-            
-            // só salta se grounded
-            if (!grounded)
-                return;
+            if (!grounded) return;
 
-            // reset vertical para salto previsível
             var v = rigidBody.linearVelocity;
             v.y = 0f;
             rigidBody.linearVelocity = v;
 
-            // aplicar "impulso" vertical (VelocityChange = ignora massa)
             rigidBody.AddForce(Vector3.up * jumpVelocity, ForceMode.VelocityChange);
 
-            // marcar cooldown e sair do chão
             nextJumpTime = Time.time + jumpCooldown;
             grounded = false;
         }
@@ -296,15 +315,16 @@ namespace InfimaGames.LowPolyShooterPack
             if (audioSource == null || rigidBody == null || playerCharacter == null)
                 return;
             
-            if (!CanMove()) // === ADIÇÃO: BLOQUEAR SOM DE PASSOS SE MORTO ===
+            if (!CanMove())
             {
                 if (audioSource != null && audioSource.isPlaying)
                     audioSource.Pause();
                 return;
             }
 
-            // passos só quando está no chão e com velocidade horizontal
-            Vector3 horizontalVel = rigidBody.linearVelocity; horizontalVel.y = 0f;
+            Vector3 horizontalVel = rigidBody.linearVelocity; 
+            horizontalVel.y = 0f;
+
             if (grounded && horizontalVel.sqrMagnitude > 0.1f)
             {
                 audioSource.clip = playerCharacter.IsRunning() ? audioClipRunning : audioClipWalking;
