@@ -4,8 +4,8 @@ using Unity.Netcode;
 public class BotCombat : NetworkBehaviour
 {
     [Header("Referências")]
-    public Transform shootPoint;      
-    public Transform eyes;            
+    public Transform shootPoint;
+    public Transform eyes;
     public string playerTag = "Player";
 
     [Header("Física e Layers")]
@@ -13,36 +13,36 @@ public class BotCombat : NetworkBehaviour
     public LayerMask obstacleLayer;
 
     [Header("Projétil (Netcode)")]
-    public GameObject bulletPrefab; 
+    public GameObject bulletPrefab;
     public float bulletSpeed = 40f;
 
     [Header("Dificuldade / Nerf")]
-    [Tooltip("Quanto maior, pior a mira. 0 = Sniper Perfeito. 1.5 = Soldado Normal. 3.0 = Stormtrooper.")]
-    public float aimInaccuracy = 1.5f; // <-- O SEGREDO DO NERF
+    [Tooltip("Erro de mira quando o jogador se mexe.")]
+    public float aimInaccuracy = 1.5f;
 
     [Header("Arma: Rifle")]
     public int rifleMagSize = 30;
     public int rifleReserveAmmo = 90;
-    public float rifleFireRate = 6f;    // Reduzi de 10 para 6 (mais lento)
-    public float rifleReloadTime = 2.0f; // Aumentei reload
-    public float rifleDamage = 5f;      // Reduzi de 10 para 5
+    public float rifleFireRate = 6f;
+    public float rifleReloadTime = 2.0f;
+    public float rifleDamage = 5f;
 
     [Header("Arma: Pistola")]
     public int pistolMagSize = 12;
     public int pistolReserveAmmo = 48;
-    public float pistolFireRate = 2f;   // Reduzi de 3 para 2
+    public float pistolFireRate = 2f;
     public float pistolReloadTime = 1.5f;
-    public float pistolDamage = 8f;     // Reduzi de 12 para 8
+    public float pistolDamage = 8f;
 
     [Header("Geral")]
     public float maxShootDistance = 200f;
-    public bool drawDebugRays = false;
+    public bool drawDebugRays = true;
 
     [Header("Dificuldade - Previsão")]
-    [Tooltip("0 = Não prevê movimento. 1 = Prevê movimento perfeito.")]
     [Range(0f, 1f)]
     public float leadAccuracy = 1.0f;
 
+    // Propriedade que o BotAI precisa de ler (Isto resolve o erro CS1061)
     public float AmmoNormalized
     {
         get
@@ -55,12 +55,15 @@ public class BotCombat : NetworkBehaviour
     }
 
     // --- Estado Interno ---
-    private Transform currentTarget; 
+    private Transform currentTarget;
+    private Rigidbody targetRbCache;
+    private CharacterController targetCcCache;
+    private Health myHealth;
     private bool inCombat = false;
-    
+
     private enum WeaponSlot { Rifle, Pistol }
     private WeaponSlot currentWeapon = WeaponSlot.Rifle;
-    
+
     private int rifleMag, rifleRes, pistolMag, pistolRes;
     private bool isReloading = false;
     private float reloadTimer = 0f;
@@ -69,7 +72,8 @@ public class BotCombat : NetworkBehaviour
     void Awake()
     {
         if (!eyes) eyes = shootPoint != null ? shootPoint : transform;
-        
+        myHealth = GetComponent<Health>();
+
         rifleMag = rifleMagSize;
         rifleRes = rifleReserveAmmo;
         pistolMag = pistolMagSize;
@@ -80,6 +84,10 @@ public class BotCombat : NetworkBehaviour
     {
         if (!IsServer) return;
 
+        // --- CORREÇÃO DO ERRO ---
+        // Adicionei .Value porque currentHealth é uma NetworkVariable
+        if (myHealth != null && myHealth.currentHealth.Value <= 0) return;
+
         if (fireCooldown > 0f) fireCooldown -= Time.deltaTime;
 
         if (isReloading)
@@ -89,36 +97,41 @@ public class BotCombat : NetworkBehaviour
             return;
         }
 
-        if (!inCombat) 
+        if (!inCombat)
         {
             TryTacticalReload();
         }
-        else if (currentTarget != null) 
+        else if (currentTarget != null)
         {
             TryShootAtTarget();
         }
     }
 
-    public void SetInCombat(bool value)
-    {
-        inCombat = value;
-    }
+    public void SetInCombat(bool value) => inCombat = value;
 
     public void SetTarget(Transform target)
     {
+        if (currentTarget == target) return;
         currentTarget = target;
-    }
 
-    // --- Lógica de Tiro ---
+        if (currentTarget != null)
+        {
+            targetRbCache = currentTarget.GetComponent<Rigidbody>();
+            targetCcCache = currentTarget.GetComponent<CharacterController>();
+        }
+        else
+        {
+            targetRbCache = null;
+            targetCcCache = null;
+        }
+    }
 
     void TryShootAtTarget()
     {
         if (fireCooldown > 0f) return;
 
         EnsureUsableWeapon();
-
         if (GetCurrentMag() <= 0 && GetCurrentReserve() <= 0) return;
-
         if (GetCurrentMag() <= 0 && GetCurrentReserve() > 0)
         {
             StartReload();
@@ -126,56 +139,49 @@ public class BotCombat : NetworkBehaviour
         }
 
         Vector3 origin = shootPoint ? shootPoint.position : eyes.position;
+        float dist = Vector3.Distance(origin, currentTarget.position);
 
-        // --- CÁLCULO DO LEAD (Previsão) ---
-        Vector3 targetVelocity = Vector3.zero;
+        if (dist > maxShootDistance) return;
 
-        // Tenta obter a velocidade do Rigidbody ou CharacterController do alvo
-        var targetRb = currentTarget.GetComponent<Rigidbody>();
-        if (targetRb) targetVelocity = targetRb.linearVelocity; // Unity 6 usa linearVelocity, Unity antigo usa velocity
-        else
+        // --- PAREDES (RAYCAST) ---
+        Vector3 directionToTarget = (currentTarget.position + Vector3.up) - origin;
+        if (Physics.Raycast(origin, directionToTarget.normalized, out RaycastHit hit, dist, obstacleLayer))
         {
-            var cc = currentTarget.GetComponent<CharacterController>();
-            if (cc) targetVelocity = cc.velocity;
+            if (drawDebugRays) Debug.DrawLine(origin, hit.point, Color.black, 0.5f);
+            return;
         }
 
-        float dist = Vector3.Distance(origin, currentTarget.position);
-        float timeToHit = dist / bulletSpeed; // Tempo que a bala demora a chegar
+        // --- CÁLCULOS DE TIRO (LEAD + SPREAD) ---
+        Vector3 targetVelocity = Vector3.zero;
+        if (targetRbCache != null) targetVelocity = targetRbCache.linearVelocity;
+        else if (targetCcCache != null) targetVelocity = targetCcCache.velocity;
 
-        // Posição futura prevista (com fator de ajuste leadAccuracy)
+        float timeToHit = dist / bulletSpeed;
         Vector3 futurePos = currentTarget.position + (targetVelocity * timeToHit * leadAccuracy);
+        Vector3 perfectTargetPos = futurePos + Vector3.up * 1.3f;
 
-        // Ponto ideal (Cabeça/Peito) na posição futura
-        Vector3 perfectTargetPos = futurePos + Vector3.up * 1.2f;
+        float targetSpeed = targetVelocity.magnitude;
+        float currentSpreadBase = (targetSpeed < 0.2f) ? aimInaccuracy * 0.1f : aimInaccuracy;
+        float finalInaccuracy = currentSpreadBase + (dist * 0.015f);
+        Vector3 errorOffset = Random.insideUnitSphere * finalInaccuracy;
 
-        // --- CÁLCULO DO SPREAD (Espalhamento/Erro) ---
-        // O erro aumenta com a distância
-        float currentInaccuracy = aimInaccuracy + (dist * 0.01f);
-        Vector3 errorOffset = Random.insideUnitSphere * currentInaccuracy;
-
-        // Ponto final com Lead + Spread
         Vector3 noisyTargetPos = perfectTargetPos + errorOffset;
         Vector3 dir = (noisyTargetPos - origin).normalized;
 
-        // Visualmente rodar para o alvo
         Vector3 flatDir = new Vector3(dir.x, 0f, dir.z);
         if (flatDir.sqrMagnitude > 0.001f)
-        {
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flatDir), Time.deltaTime * 8f);
-        }
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flatDir), Time.deltaTime * 15f);
 
         if (drawDebugRays)
         {
-            Debug.DrawLine(origin, currentTarget.position, Color.yellow, 0.1f); // Onde ele está
-            Debug.DrawLine(origin, perfectTargetPos, Color.green, 0.1f);      // Onde vai estar (Lead)
-            Debug.DrawRay(origin, dir * maxShootDistance, Color.red, 0.1f);   // Tiro real (Lead + Spread)
+            Debug.DrawLine(origin, perfectTargetPos, Color.green, 0.1f);
+            Debug.DrawRay(origin, dir * maxShootDistance, Color.red, 0.1f);
         }
 
-        // --- DISPARAR (NETCODE) ---
+        // DISPARAR
         if (bulletPrefab != null)
         {
             GameObject bullet = Instantiate(bulletPrefab, origin, Quaternion.LookRotation(dir));
-
             var bp = bullet.GetComponent<BulletProjectile>();
             var rb = bullet.GetComponent<Rigidbody>();
             var netObj = bullet.GetComponent<NetworkObject>();
@@ -192,68 +198,28 @@ public class BotCombat : NetworkBehaviour
 
                 netObj.Spawn(true);
             }
-            else
+            else if (netObj)
             {
-                Debug.LogError($"[BotCombat] Erro no Prefab da Bala!");
-                Destroy(bullet);
+                netObj.Spawn(true);
             }
         }
 
         ConsumeAmmo();
-        fireCooldown = 1f / GetCurrentFireRate();
+        float baseCooldown = 1f / GetCurrentFireRate();
+        fireCooldown = baseCooldown * Random.Range(0.95f, 1.05f);
     }
 
-    // --- Gestão de Munição e Armas ---
-
-    void EnsureUsableWeapon()
-    {
-        if (GetCurrentMag() <= 0 && GetCurrentReserve() <= 0)
-        {
-            WeaponSlot other = (currentWeapon == WeaponSlot.Rifle) ? WeaponSlot.Pistol : WeaponSlot.Rifle;
-            if (GetTotalAmmo(other) > 0) currentWeapon = other;
-        }
-    }
-
-    void TryTacticalReload()
-    {
-        if (GetCurrentReserve() > 0 && GetCurrentMag() < GetCurrentMagSize()) 
-            StartReload();
-    }
-
-    void StartReload()
-    {
-        if (isReloading || GetCurrentReserve() <= 0) return;
-        isReloading = true;
-        reloadTimer = (currentWeapon == WeaponSlot.Rifle) ? rifleReloadTime : pistolReloadTime;
-    }
-
-    void FinishReload()
-    {
-        isReloading = false;
-        int magSize = GetCurrentMagSize();
-        int mag = GetCurrentMag();
-        int reserve = GetCurrentReserve();
-
-        int needed = magSize - mag;
-        int toLoad = Mathf.Min(needed, reserve);
-
-        mag += toLoad;
-        reserve -= toLoad;
-
-        SetCurrentMag(mag);
-        SetCurrentReserve(reserve);
-    }
-
+    // --- Helpers ---
+    void EnsureUsableWeapon() { if (GetCurrentMag() <= 0 && GetCurrentReserve() <= 0) { WeaponSlot other = (currentWeapon == WeaponSlot.Rifle) ? WeaponSlot.Pistol : WeaponSlot.Rifle; if (GetTotalAmmo(other) > 0) currentWeapon = other; } }
+    void TryTacticalReload() { if (GetCurrentReserve() > 0 && GetCurrentMag() < GetCurrentMagSize()) StartReload(); }
+    void StartReload() { if (isReloading || GetCurrentReserve() <= 0) return; isReloading = true; reloadTimer = (currentWeapon == WeaponSlot.Rifle) ? rifleReloadTime : pistolReloadTime; }
+    void FinishReload() { isReloading = false; int mag = GetCurrentMag(); int reserve = GetCurrentReserve(); int needed = GetCurrentMagSize() - mag; int toLoad = Mathf.Min(needed, reserve); mag += toLoad; reserve -= toLoad; SetCurrentMag(mag); SetCurrentReserve(reserve); }
     void ConsumeAmmo() => SetCurrentMag(GetCurrentMag() - 1);
-
     float GetCurrentFireRate() => (currentWeapon == WeaponSlot.Rifle) ? rifleFireRate : pistolFireRate;
     int GetCurrentMagSize() => (currentWeapon == WeaponSlot.Rifle) ? rifleMagSize : pistolMagSize;
-    
     int GetCurrentMag() => (currentWeapon == WeaponSlot.Rifle) ? rifleMag : pistolMag;
     void SetCurrentMag(int v) { if (currentWeapon == WeaponSlot.Rifle) rifleMag = v; else pistolMag = v; }
-    
     int GetCurrentReserve() => (currentWeapon == WeaponSlot.Rifle) ? rifleRes : pistolRes;
     void SetCurrentReserve(int v) { if (currentWeapon == WeaponSlot.Rifle) rifleRes = v; else pistolRes = v; }
-    
     int GetTotalAmmo(WeaponSlot s) => (s == WeaponSlot.Rifle) ? (rifleMag + rifleRes) : (pistolMag + pistolRes);
 }
