@@ -1707,6 +1707,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: HealthPickup
       objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
+      value: HealthPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_LocalPosition.x
       value: 4.438751
@@ -4952,6 +4956,10 @@ PrefabInstance:
     - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_Name
       value: HealthPickup (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
+      value: HealthPickup
       objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_LocalPosition.x
@@ -9020,6 +9028,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: AmmoPickup (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
+      propertyPath: m_TagString
+      value: AmmoPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 4689935230788934902, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_LocalPosition.x
       value: 18.876762
@@ -10853,6 +10865,10 @@ PrefabInstance:
     - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_Name
       value: AmmoPickup (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
+      propertyPath: m_TagString
+      value: AmmoPickup
       objectReference: {fileID: 0}
     - target: {fileID: 4689935230788934902, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_LocalPosition.x
@@ -15047,6 +15063,10 @@ PrefabInstance:
     - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_Name
       value: HealthPickup (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
+      value: HealthPickup
       objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_LocalPosition.x
@@ -34895,6 +34915,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: HealthPickup (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
+      value: HealthPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_LocalPosition.x
       value: 34.577972
@@ -50985,6 +51009,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: HealthPickup (5)
       objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
+      value: HealthPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_LocalPosition.x
       value: 34.677635
@@ -53589,6 +53617,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: AmmoPickup
       objectReference: {fileID: 0}
+    - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
+      propertyPath: m_TagString
+      value: AmmoPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 4689935230788934902, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_LocalPosition.x
       value: 21.625175
@@ -55460,6 +55492,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: AmmoPickup (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
+      propertyPath: m_TagString
+      value: AmmoPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 4689935230788934902, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_LocalPosition.x
       value: 32.27401
@@ -55611,6 +55647,10 @@ PrefabInstance:
     - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_Name
       value: AmmoPickup (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
+      propertyPath: m_TagString
+      value: AmmoPickup
       objectReference: {fileID: 0}
     - target: {fileID: 4689935230788934902, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_LocalPosition.x
@@ -57910,6 +57950,10 @@ PrefabInstance:
     - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_Name
       value: HealthPickup (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
+      value: HealthPickup
       objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_LocalPosition.x
@@ -70301,6 +70345,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: AmmoPickup
       objectReference: {fileID: 0}
+    - target: {fileID: 1743255468395745511, guid: 464e457e2a8946441b2275402395196c, type: 3}
+      propertyPath: m_TagString
+      value: AmmoPickup
+      objectReference: {fileID: 0}
     - target: {fileID: 4689935230788934902, guid: 464e457e2a8946441b2275402395196c, type: 3}
       propertyPath: m_LocalPosition.x
       value: 2.332985
@@ -70356,6 +70404,10 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
       propertyPath: m_Name
+      value: HealthPickup
+      objectReference: {fileID: 0}
+    - target: {fileID: 7473937389845061441, guid: 75c62994ed9eb714090567d03b73c332, type: 3}
+      propertyPath: m_TagString
       value: HealthPickup
       objectReference: {fileID: 0}
     - target: {fileID: 8929426785956675134, guid: 75c62994ed9eb714090567d03b73c332, type: 3}

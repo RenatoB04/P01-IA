@@ -17,6 +17,8 @@ TagManager:
   - SpawnPoint
   - FirstPerson
   - RespawnTimerTag
+  - HealthPickup
+  - AmmoPickup
   layers:
   - Default
   - TransparentFX

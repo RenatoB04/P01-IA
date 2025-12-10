@@ -359,7 +359,7 @@ MonoBehaviour:
   eyes: {fileID: 3900392460460622126}
   animator: {fileID: 7962300126063729774}
   combat: {fileID: 6901106721239255318}
-  healthSource: {fileID: 343666345208374789}
+  healthSource: {fileID: 0}
   healthCurrentField: currentHealth
   healthMaxField: maxHealth
   patrolPoints: []
@@ -372,8 +372,8 @@ MonoBehaviour:
     m_Bits: 959
   viewRadius: 60
   maxSearchTime: 10
-  idealCombatDistance: 10
-  tooCloseDistance: 4
+  idealCombatDistance: 25
+  tooCloseDistance: 5
   giveUpDistance: 120
   lowHealthThreshold: 0.2
   lowAmmoThreshold: 0.2
