@@ -14,7 +14,7 @@ namespace InfimaGames.LowPolyShooterPack
     /// </summary>
     [RequireComponent(typeof(CharacterKinematics))]
     // ALTERAÇÃO CRUCIAL: Substituído CharacterBehaviour por NetworkBehaviour
-    public sealed class Character : NetworkBehaviour 
+    public sealed class Character : NetworkBehaviour, ICameraLook
     {
        #region FIELDS SERIALIZED
 
@@ -44,6 +44,9 @@ namespace InfimaGames.LowPolyShooterPack
        [Tooltip("Normal Camera.")]
        [SerializeField]
        private Camera cameraWorld;
+       
+       [SerializeField, Range(0.1f, 10f)]
+       private float mouseSensitivity = 1.0f;
 
        [Header("Animation")]
        [Tooltip("Determines how smooth the locomotion blendspace é.")]
@@ -58,6 +61,7 @@ namespace InfimaGames.LowPolyShooterPack
        [Tooltip("Character Animator.")]
        [SerializeField]
        private Animator characterAnimator;
+       
        
        // === ADIÇÃO: REFERÊNCIA AO SCRIPT DE ESTADO ===
        [Header("Gestão de Estado de Morte")]
@@ -339,16 +343,14 @@ namespace InfimaGames.LowPolyShooterPack
        // CORREÇÃO: Removido 'override'
        protected void Start()
        {
-          //Cache a reference to the holster layer's index.
+          // Cache das layers (como já tens)
           layerHolster = characterAnimator.GetLayerIndex("Layer Holster");
-          //Cache a reference to the action layer's index.
           layerActions = characterAnimator.GetLayerIndex("Layer Actions");
-          //Cache a reference to the overlay layer's index.
           layerOverlay = characterAnimator.GetLayerIndex("Layer Overlay");
 
-          // CORREÇÃO DA ARMA: Removida a inicialização de armas, que agora está no OnNetworkSpawn()
-          // if(inventory != null) inventory.Init(); 
-          // if(inventory != null) RefreshWeaponSetup();
+          // Aplica a sensibilidade guardada
+          float savedSensitivity = PlayerPrefs.GetFloat("settings_sensitivity", 1.0f);
+          SetMouseSensitivity(savedSensitivity);
        }
 
        // CORREÇÃO: Removido 'override'
@@ -1055,16 +1057,14 @@ namespace InfimaGames.LowPolyShooterPack
        /// </summary>
        public void OnLook(InputAction.CallbackContext context)
        {
-          if (!IsOwner) return; // ADIÇÃO CRUCIAL
-          
-          if (!CanProcessInput()) // === ADIÇÃO: BLOQUEIO DE ESTADO ===
+          if (!IsOwner) return;
+          if (!CanProcessInput())
           {
-             axisLook = Vector2.zero; // Limpar o input de olhar
+             axisLook = Vector2.zero;
              return;
           }
-          
-          //Read.
-          axisLook = cursorLocked ? context.ReadValue<Vector2>() : default;
+
+          axisLook = cursorLocked ? context.ReadValue<Vector2>() * mouseSensitivity : default;
        }
 
        /// <summary>
@@ -1094,6 +1094,11 @@ namespace InfimaGames.LowPolyShooterPack
                if (r != null)
                    r.enabled = enabled;
            }
+       }
+       
+       public void SetMouseSensitivity(float value)
+       {
+          mouseSensitivity = value;
        }
 
        #endregion
