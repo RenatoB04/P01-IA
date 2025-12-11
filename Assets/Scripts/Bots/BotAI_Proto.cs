@@ -44,6 +44,10 @@ public class BotAI_Proto : NetworkBehaviour
     public float viewRadius = 60f;
     public float maxSearchTime = 10f;
 
+    [Header("Otimização (NOVO)")]
+    [Tooltip("Intervalo em segundos entre verificações de Raycast de visão.")]
+    public float visionCheckInterval = 0.2f; // ~5 vezes por segundo
+
     [Header("Combate")]
     public float idealCombatDistance = 10f;
     public float tooCloseDistance = 4f;
@@ -69,8 +73,12 @@ public class BotAI_Proto : NetworkBehaviour
     int patrolIndex = -1;
     int patrolDirection = 1;
     Vector3 lastKnownPlayerPos;
-    float timeSinceLastSeen = 999f;
+    float timeSinceLastSeen;
     float targetSearchTimer = 0f;
+
+    // Variáveis de Otimização
+    float visionTimer = 0f;
+    bool cachedVisibility = false;
 
     void OnEnable()
     {
@@ -108,14 +116,14 @@ public class BotAI_Proto : NetworkBehaviour
             enabled = false;
             return;
         }
-        currentState = BotState.Patrol;
+        ChangeState(BotState.Patrol);
     }
 
     void Update()
     {
         if (!IsServer || !agent || !agent.isOnNavMesh) return;
 
-        // 0. Verificar Morte (Prioridade Absoluta)
+        // Verificar morte
         var health = GetComponent<Health>();
         if (health != null && health.isDead.Value)
         {
@@ -127,13 +135,92 @@ public class BotAI_Proto : NetworkBehaviour
             return;
         }
 
-        // 1. Atualizar Sensores (Visão e Alvos)
-        UpdateSensors();
+        // 1. Procurar Jogador (a cada 0.5s)
+        targetSearchTimer += Time.deltaTime;
+        if (targetSearchTimer > 0.5f)
+        {
+            FindClosestPlayer();
+            targetSearchTimer = 0f;
+        }
 
-        // 2. RODAR ÁRVORE DE DECISÃO (Define o currentState)
-        Think();
+        // 2. Decisão de Estado e Visão Otimizada
+        float health01 = GetHealth01();
+        bool lowHealth = health01 > 0f && health01 <= lowHealthThreshold;
 
-        // 3. Executar Estado (Apenas move/ataca, não decide trocar de estado)
+        float ammo01 = 1f;
+        bool lowAmmo = false;
+        if (combat)
+        {
+            ammo01 = combat.AmmoNormalized;
+            lowAmmo = ammo01 <= lowAmmoThreshold;
+        }
+
+        // LÓGICA DE VISÃO OTIMIZADA
+        float distToPlayer = Mathf.Infinity;
+        if (currentTarget)
+        {
+            distToPlayer = Vector3.Distance(transform.position, currentTarget.position);
+            
+            // Só executa o Raycast pesado se o timer permitir
+            visionTimer += Time.deltaTime;
+            if (visionTimer >= visionCheckInterval)
+            {
+                cachedVisibility = CheckVisibilityPhysics(distToPlayer);
+                visionTimer = 0f;
+            }
+        }
+        else
+        {
+            cachedVisibility = false;
+        }
+
+        bool playerVisible = cachedVisibility;
+
+        if (playerVisible)
+        {
+            lastKnownPlayerPos = currentTarget.position;
+            timeSinceLastSeen = 0f;
+        }
+        else
+        {
+            timeSinceLastSeen += Time.deltaTime;
+        }
+
+        // Prioridades e Transições
+        if (lowHealth)
+        {
+            if (currentState != BotState.Retreat) ChangeState(BotState.Retreat);
+        }
+        else if (lowAmmo && currentState != BotState.GoToAmmo)
+        {
+            ChangeState(BotState.GoToAmmo);
+        }
+        else
+        {
+            if (playerVisible && distToPlayer <= giveUpDistance)
+            {
+                if (distToPlayer <= idealCombatDistance * 1.1f)
+                    ChangeState(BotState.Attack);
+                else
+                    ChangeState(BotState.Chase);
+            }
+            else
+            {
+                // Perdeu visão
+                if (timeSinceLastSeen > 0f && timeSinceLastSeen <= maxSearchTime &&
+                    (currentState == BotState.Chase || currentState == BotState.Attack))
+                {
+                    ChangeState(BotState.Search);
+                }
+                else if (timeSinceLastSeen > maxSearchTime &&
+                         (currentState == BotState.Search || currentState == BotState.Chase || currentState == BotState.Attack))
+                {
+                    ChangeState(BotState.Patrol);
+                }
+            }
+        }
+
+        // 3. Execução
         switch (currentState)
         {
             case BotState.Patrol: TickPatrol(); break;
@@ -145,87 +232,6 @@ public class BotAI_Proto : NetworkBehaviour
         }
 
         UpdateAnimator();
-    }
-
-    // =========================================================
-    //               ÁRVORE DE DECISÃO (CÉREBRO)
-    // =========================================================
-    void Think()
-    {
-        // Nó 1: Sobrevivência (Vida Baixa) -> FOGE
-        if (GetHealth01() <= lowHealthThreshold)
-        {
-            currentState = BotState.Retreat;
-            return;
-        }
-
-        // Nó 2: Recursos (Munição Baixa) -> VAI BUSCAR BALAS
-        if (combat != null && combat.AmmoNormalized <= lowAmmoThreshold)
-        {
-            currentState = BotState.GoToAmmo;
-            return;
-        }
-
-        // Nó 3: Combate (Visão Direta) -> ATACA ou PERSEGUE
-        if (currentTarget != null)
-        {
-            float distToPlayer = Vector3.Distance(transform.position, currentTarget.position);
-            bool canSee = CanSeePlayer(distToPlayer);
-
-            if (canSee)
-            {
-                // Se vejo o jogador:
-                // Perto o suficiente? Ataca.
-                // Longe? Persegue.
-                if (distToPlayer <= idealCombatDistance * 1.1f)
-                    currentState = BotState.Attack;
-                else
-                    currentState = BotState.Chase;
-
-                return; // Decisão tomada
-            }
-        }
-
-        // Nó 4: Memória (Perdi de vista recentemente) -> PROCURA
-        if (timeSinceLastSeen < maxSearchTime)
-        {
-            currentState = BotState.Search;
-            return;
-        }
-
-        // Nó 5: Default -> PATRULHA
-        currentState = BotState.Patrol;
-    }
-
-    // =========================================================
-    //               SENSORES E INTERNOS
-    // =========================================================
-
-    void UpdateSensors()
-    {
-        // Procurar jogador periodicamente
-        targetSearchTimer += Time.deltaTime;
-        if (targetSearchTimer > 0.5f)
-        {
-            FindClosestPlayer();
-            targetSearchTimer = 0f;
-        }
-
-        // Atualizar memória de visão
-        if (currentTarget)
-        {
-            float dist = Vector3.Distance(transform.position, currentTarget.position);
-            if (CanSeePlayer(dist))
-            {
-                lastKnownPlayerPos = currentTarget.position;
-                timeSinceLastSeen = 0f;
-                AlertNearbyBots(); // Avisar aliados se vi o jogador
-            }
-            else
-            {
-                timeSinceLastSeen += Time.deltaTime;
-            }
-        }
     }
 
     void HandleDeath()
@@ -269,12 +275,10 @@ public class BotAI_Proto : NetworkBehaviour
         if (combat) combat.SetTarget(currentTarget);
     }
 
-    // --- EXECUÇÃO DOS ESTADOS (SEM LOGICA DE TROCA, SÓ AÇÃO) ---
+    // --- ESTADOS ---
 
     void TickPatrol()
     {
-        if (combat) combat.SetInCombat(false);
-
         if (patrolPoints == null || patrolPoints.Length == 0)
         {
             agent.isStopped = true;
@@ -300,27 +304,28 @@ public class BotAI_Proto : NetworkBehaviour
             AdvancePatrolIndex();
             if (patrolPoints[patrolIndex]) agent.SetDestination(patrolPoints[patrolIndex].position);
         }
+
+        if (combat) combat.SetInCombat(false);
     }
 
     void TickChase()
     {
-        if (combat) combat.SetInCombat(true);
-        if (!currentTarget) return;
+        if (!currentTarget) { ChangeState(BotState.Search); return; }
 
         agent.isStopped = false;
         agent.speed = baseSpeed;
         agent.SetDestination(currentTarget.position);
+
+        if (combat) combat.SetInCombat(true);
     }
 
     void TickAttack()
     {
-        if (combat) combat.SetInCombat(true);
-        if (!currentTarget) return;
+        if (!currentTarget) { ChangeState(BotState.Search); return; }
 
         Vector3 toPlayer = currentTarget.position - transform.position;
         float dist = toPlayer.magnitude;
 
-        // Comportamento de combate simples
         if (dist > idealCombatDistance + 1f)
         {
             agent.isStopped = false;
@@ -337,26 +342,26 @@ public class BotAI_Proto : NetworkBehaviour
         {
             agent.isStopped = true;
             agent.ResetPath();
+
             Vector3 dir = (currentTarget.position - transform.position).normalized;
             dir.y = 0;
             if (dir != Vector3.zero)
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(dir), Time.deltaTime * 5f);
         }
+
+        if (combat) combat.SetInCombat(true);
     }
 
     void TickSearch()
     {
-        if (combat) combat.SetInCombat(false);
-
         agent.isStopped = false;
         agent.speed = baseSpeed;
         agent.SetDestination(lastKnownPlayerPos);
+        if (combat) combat.SetInCombat(false);
     }
 
     void TickRetreat()
     {
-        if (combat) combat.SetInCombat(true); // Dispara enquanto foge
-
         agent.isStopped = false;
         agent.speed = baseSpeed * retreatSpeedMultiplier;
 
@@ -367,36 +372,42 @@ public class BotAI_Proto : NetworkBehaviour
         }
         else if (currentTarget)
         {
-            // Foge do jogador se não houver pickups
             Vector3 away = (transform.position - currentTarget.position).normalized;
             agent.SetDestination(transform.position + away * 8f);
         }
+
+        if (combat) combat.SetInCombat(true);
     }
 
     void TickGoToAmmo()
     {
-        if (combat) combat.SetInCombat(false);
-
         agent.isStopped = false;
         agent.speed = baseSpeed;
 
         Transform ammo = GetClosestTransform(ammoPickups, transform.position);
         if (ammo != null)
             agent.SetDestination(ammo.position);
+        else
+            ChangeState(BotState.Patrol);
+
+        if (combat) combat.SetInCombat(false);
     }
 
     // --- UTILITÁRIOS ---
 
-    bool CanSeePlayer(float distToPlayer)
+    // Método renomeado para "CheckVisibilityPhysics" para ser claro
+    bool CheckVisibilityPhysics(float distToPlayer)
     {
         if (!currentTarget) return false;
         if (distToPlayer > viewRadius) return false;
 
         Vector3 origin = eyes.position;
+        // Aponta ligeiramente acima (1.0f) para evitar colisões com chão/joelhos
         Vector3 targetPos = currentTarget.position + Vector3.up * 1.0f;
         Vector3 dir = (targetPos - origin);
         float dist = dir.magnitude;
 
+        // O Raycast pesado que estamos a limitar
         if (Physics.Raycast(origin, dir.normalized, out RaycastHit hit, dist, obstacleMask, QueryTriggerInteraction.Ignore))
         {
             if (hit.collider.transform != currentTarget && hit.collider.transform.root != currentTarget)
@@ -438,6 +449,24 @@ public class BotAI_Proto : NetworkBehaviour
         return 1f;
     }
 
+    void ChangeState(BotState newState)
+    {
+        if (currentState == newState) return;
+        currentState = newState;
+
+        if (currentState == BotState.Search && lastKnownPlayerPos != Vector3.zero)
+            agent.SetDestination(lastKnownPlayerPos);
+
+        if (combat)
+        {
+            bool inCombat = (currentState == BotState.Chase) || (currentState == BotState.Attack) || (currentState == BotState.Retreat);
+            combat.SetInCombat(inCombat);
+        }
+
+        if (currentState == BotState.Chase || currentState == BotState.Attack)
+            AlertNearbyBots();
+    }
+
     void AlertNearbyBots()
     {
         if (!currentTarget) return;
@@ -454,7 +483,8 @@ public class BotAI_Proto : NetworkBehaviour
     {
         lastKnownPlayerPos = pos;
         timeSinceLastSeen = 0f;
-        // Nota: A árvore de decisão vai apanhar isto no "Think" e mudar para Search ou Chase automaticamente
+        if (currentState == BotState.Patrol || currentState == BotState.Search)
+            ChangeState(BotState.Chase);
     }
 
     void UpdateAnimator()

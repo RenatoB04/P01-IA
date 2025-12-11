@@ -372,6 +372,7 @@ MonoBehaviour:
     m_Bits: 959
   viewRadius: 60
   maxSearchTime: 10
+  visionCheckInterval: 0.2
   idealCombatDistance: 25
   tooCloseDistance: 5
   giveUpDistance: 120
@@ -403,7 +404,49 @@ MonoBehaviour:
     m_Bits: 128
   bulletPrefab: {fileID: 7869800553090129627, guid: 3a1c71fa6ce298a429a701782403710f, type: 3}
   bulletSpeed: 40
-  aimInaccuracy: 1
+  spreadOverDistance:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0.6370392
+      value: 0.046594143
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 26.855408
+      value: 2.028534
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 56.005768
+      value: 4.3864746
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 108.78517
+      value: 9.78273
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  aimInaccuracyMultiplier: 1
   rifleMagSize: 30
   rifleReserveAmmo: 90
   rifleFireRate: 6
@@ -417,6 +460,8 @@ MonoBehaviour:
   maxShootDistance: 200
   drawDebugRays: 1
   leadAccuracy: 1
+  showShootPointGizmos: 1
+  logShootingPosition: 0
 --- !u!114 &5605481851879202998
 MonoBehaviour:
   m_ObjectHideFlags: 0
