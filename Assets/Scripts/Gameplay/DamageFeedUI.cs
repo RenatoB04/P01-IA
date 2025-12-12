@@ -6,8 +6,8 @@ public class DamageFeedUI : MonoBehaviour
     public static DamageFeedUI Instance { get; private set; }
 
     [Header("Refs")]
-    public RectTransform content;          // arrasta o Content
-    public DamageFeedItem itemPrefab;      // arrasta o prefab
+    public RectTransform content;          
+    public DamageFeedItem itemPrefab;      
     public int maxItems = 6;
 
     [Header("Estilo")]
@@ -27,14 +27,14 @@ public class DamageFeedUI : MonoBehaviour
     {
         DamageFeedItem it = pool.Count > 0 ? pool.Dequeue() : Instantiate(itemPrefab, content);
         it.gameObject.SetActive(true);
-        // garantir ordem: itens novos no topo → move para first sibling
+        
         it.transform.SetAsFirstSibling();
         return it;
     }
 
     void RecycleInactive()
     {
-        // remove os que já se auto-desativaram
+        
         for (int i = active.Count - 1; i >= 0; i--)
         {
             if (!active[i].gameObject.activeSelf)
@@ -45,14 +45,14 @@ public class DamageFeedUI : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Adiciona uma entrada, ex.: "-20" (dano) ou o que quiseres.
-    /// </summary>
+    
+    
+    
     public void Push(float amount, bool isCrit = false, string targetName = null)
     {
         RecycleInactive();
 
-        // Limita nº de linhas
+        
         while (active.Count >= maxItems)
         {
             var oldest = active[active.Count - 1];
@@ -69,6 +69,6 @@ public class DamageFeedUI : MonoBehaviour
 
         var item = GetItem();
         item.Init(txt, color);
-        active.Insert(0, item); // mantemos referência
+        active.Insert(0, item); 
     }
 }

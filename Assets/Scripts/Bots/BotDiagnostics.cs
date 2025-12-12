@@ -1,10 +1,10 @@
 using System;
 using UnityEngine;
 
-// Diagnostic helper para Bots (modo offline).
-// - Adiciona este componente ao prefab do Bot (ou ao objecto do bot na cena).
-// - Em runtime vai logar existência de Health, Rigidbody, Collider, layer,
-//   colisões que o bot recebe, e detalhes do Bullet (ownerTeam, ownerClientId, ownerRoot, damage).
+
+
+
+
 [DisallowMultipleComponent]
 public class BotDiagnostics : MonoBehaviour
 {
@@ -42,7 +42,7 @@ public class BotDiagnostics : MonoBehaviour
 
     void Update()
     {
-        // Observa mudanças no HP e loga (útil para confirmar ApplyDamageServer)
+        
         if (health != null)
         {
             float curr = health.currentHealth.Value;
@@ -54,7 +54,7 @@ public class BotDiagnostics : MonoBehaviour
         }
     }
 
-    // Colisões físicas
+    
     void OnCollisionEnter(Collision collision)
     {
         if (!verbose) return;
@@ -77,21 +77,21 @@ public class BotDiagnostics : MonoBehaviour
         if (hitPoint.HasValue) s += $" hitPos={hitPoint.Value}";
         Debug.Log(s);
 
-        // Tenta identificar se foi um BulletProjectile
+        
         var bullet = col.GetComponentInParent<BulletProjectile>() ?? col.GetComponentInChildren<BulletProjectile>();
         if (bullet != null)
         {
-            // Log extra para diagnóstico: ownerTeam, ownerClientId, ownerRoot, damage, initialVelocity (se disponível)
+            
             int ownerTeam = -999;
             try { ownerTeam = bullet.ownerTeam; } catch { }
             var ownerRootName = bullet.ownerRoot ? bullet.ownerRoot.name : "null";
             Debug.Log($"[BotDiagnostics] ({id}) Colidido por BulletProjectile: ownerClientId={bullet.ownerClientId}, ownerTeam={ownerTeam}, ownerRoot={ownerRootName}, damage={bullet.damage}, initialVelocity={bullet.initialVelocity.Value}");
         }
 
-        // Tenta ver se o alvo recebeu dano (compararemos no Update por causa de network timing)
+        
     }
 
-    // utilitário para forçar um snapshot rápido do estado do Health
+    
     [ContextMenu("DumpHealthState")]
     public void DumpHealthState()
     {

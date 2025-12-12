@@ -6,8 +6,8 @@ using UnityEngine;
 
 public struct AbilityCooldownState : INetworkSerializable, IEquatable<AbilityCooldownState>
 {
-    public FixedString32Bytes Id;   // ex.: "dash", "grenade"
-    public double EndTime;          // tempo de fim no relógio de rede (NetworkTime)
+    public FixedString32Bytes Id;   
+    public double EndTime;          
 
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
@@ -20,10 +20,10 @@ public struct AbilityCooldownState : INetworkSerializable, IEquatable<AbilityCoo
 
 public class AbilityCooldowns : NetworkBehaviour
 {
-    // Lista replicada: o servidor escreve; todos leem.
+    
     public NetworkList<AbilityCooldownState> Cooldowns;
 
-    // Cache (lado cliente) para consulta rápida
+    
     private readonly Dictionary<string, int> indexById = new();
 
     void Awake()
@@ -36,12 +36,12 @@ public class AbilityCooldowns : NetworkBehaviour
         base.OnNetworkSpawn();
         Cooldowns.OnListChanged += OnCooldownsChanged;
 
-        // Se quiseres estados iniciais no servidor, podes setar aqui.
+        
         if (IsServer && Cooldowns.Count == 0)
         {
-            // Exemplo: registra habilidades conhecidas com EndTime 0 (prontas)
-            // RegisterAbilityServer("dash");
-            // RegisterAbilityServer("grenade");
+            
+            
+            
         }
     }
 
@@ -53,15 +53,15 @@ public class AbilityCooldowns : NetworkBehaviour
 
     private void OnCooldownsChanged(NetworkListEvent<AbilityCooldownState> change)
     {
-        // Rebuild simples do índice quando a lista muda
+        
         indexById.Clear();
         for (int i = 0; i < Cooldowns.Count; i++)
             indexById[Cooldowns[i].Id.ToString()] = i;
     }
 
-    // ---------------- API de Servidor ----------------
+    
 
-    // Registra a habilidade se não existir (EndTime = 0 => pronta)
+    
     public void RegisterAbilityServer(string id)
     {
         if (!IsServer) return;
@@ -76,7 +76,7 @@ public class AbilityCooldowns : NetworkBehaviour
         indexById[id] = Cooldowns.Count - 1;
     }
 
-    // Tenta usar a habilidade: se pronta, inicia cooldown e retorna true; senão false
+    
     public bool TryUseAbilityServer(string id, float cooldownSeconds)
     {
         if (!IsServer) return false;
@@ -88,13 +88,13 @@ public class AbilityCooldowns : NetworkBehaviour
         if (st.EndTime <= now)
         {
             st.EndTime = now + Mathf.Max(0.01f, cooldownSeconds);
-            Cooldowns[idx] = st; // dispara replicação
+            Cooldowns[idx] = st; 
             return true;
         }
         return false;
     }
 
-    // Força o cooldown (ex.: cancelar, resetar, aplicar penalidade)
+    
     public void SetCooldownServer(string id, float secondsFromNow)
     {
         if (!IsServer) return;
@@ -106,7 +106,7 @@ public class AbilityCooldowns : NetworkBehaviour
         Cooldowns[idx] = st;
     }
 
-    // ---------------- Consulta (Cliente/Servidor) ----------------
+    
 
     public float GetRemaining(string id)
     {
@@ -118,7 +118,7 @@ public class AbilityCooldowns : NetworkBehaviour
 
     public bool IsReady(string id) => GetRemaining(id) <= 0.0001f;
 
-    // ---------------- Helpers ----------------
+    
 
     private int EnsureIndexServer(string id)
     {
@@ -135,11 +135,11 @@ public class AbilityCooldowns : NetworkBehaviour
         return idx;
     }
 
-    // Exemplo de ServerRpc: o cliente pede para usar a habilidade; servidor valida e inicia cooldown
+    
     [ServerRpc(RequireOwnership = false)]
     public void RequestUseAbilityServerRpc(string id, float cooldownSeconds)
     {
         TryUseAbilityServer(id, cooldownSeconds);
-        // Aqui também executarías o efeito da habilidade (dash, granada, etc.) no servidor.
+        
     }
 }

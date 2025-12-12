@@ -9,10 +9,10 @@ public class DamageIndicatorUI : MonoBehaviour
 
     [Header("Refs")]
     public Canvas canvas;
-    public CanvasGroup vignetteGroup;     // CanvasGroup do DamageVignette
-    public Image vignetteImage;           // Image do DamageVignette (opcional, só se quiseres trocar cor)
-    public RectTransform indicatorsRoot;  // DamageIndicators (pai)
-    public RectTransform arrowPrefab;     // Prefab da seta
+    public CanvasGroup vignetteGroup;     
+    public Image vignetteImage;           
+    public RectTransform indicatorsRoot;  
+    public RectTransform arrowPrefab;     
 
     [Header("Vignette Flash")]
     [Tooltip("Alpha do flash no pico do dano (0..1).")]
@@ -28,7 +28,7 @@ public class DamageIndicatorUI : MonoBehaviour
     [Tooltip("Vida útil da seta (segundos).")]
     public float arrowLifetime = 0.9f;
     [Tooltip("Escala do tamanho baseado no dano recebido.")]
-    public Vector2 arrowScaleRange = new Vector2(0.9f, 1.3f); // min..max
+    public Vector2 arrowScaleRange = new Vector2(0.9f, 1.3f); 
 
     Camera _cam;
     readonly List<Arrow> _arrows = new List<Arrow>();
@@ -56,7 +56,7 @@ public class DamageIndicatorUI : MonoBehaviour
 
     void Update()
     {
-        // Fade de cada seta
+        
         float now = Time.unscaledTime;
         for (int i = _arrows.Count - 1; i >= 0; i--)
         {
@@ -91,20 +91,20 @@ public class DamageIndicatorUI : MonoBehaviour
         _pool.Enqueue(rt);
     }
 
-    /// <summary>
-    /// Chama isto quando o player leva dano.
-    /// </summary>
-    /// <param name="worldFrom">Posição no mundo de onde veio o dano (ex.: atacante).</param>
-    /// <param name="damage">Quantidade de dano (usa para escalar a seta/alpha).</param>
+    
+    
+    
+    
+    
     public void RegisterHit(Vector3 worldFrom, float damage = 10f)
     {
         if (_cam == null) _cam = Camera.main;
         if (_cam == null) return;
 
-        // 1) Flash
+        
         DoFlash(damage);
 
-        // 2) Indicador direcional
+        
         Vector2 dir;
         float angle;
         GetScreenDirection(worldFrom, out dir, out angle);
@@ -112,7 +112,7 @@ public class DamageIndicatorUI : MonoBehaviour
         var rt = GetArrow();
         rt.anchoredPosition = dir * radius;
         rt.localRotation = Quaternion.Euler(0, 0, angle);
-        float dmg01 = Mathf.Clamp01(damage / 50f); // normaliza "por alto"
+        float dmg01 = Mathf.Clamp01(damage / 50f); 
         float scale = Mathf.Lerp(arrowScaleRange.x, arrowScaleRange.y, dmg01);
         rt.localScale = Vector3.one * scale;
 
@@ -145,7 +145,7 @@ public class DamageIndicatorUI : MonoBehaviour
 
     IEnumerator FlashRoutine(float peak)
     {
-        // In
+        
         float t = 0f;
         while (t < flashInTime)
         {
@@ -156,7 +156,7 @@ public class DamageIndicatorUI : MonoBehaviour
         }
         vignetteGroup.alpha = peak;
 
-        // Out
+        
         t = 0f;
         while (t < flashOutTime)
         {
@@ -169,17 +169,17 @@ public class DamageIndicatorUI : MonoBehaviour
         _flashRoutine = null;
     }
 
-    // Converte world pos → direção 2D a partir do centro do ecrã e ângulo para rodar a seta
+    
     void GetScreenDirection(Vector3 worldFrom, out Vector2 dir, out float angleDeg)
     {
         Vector3 screen = _cam.WorldToScreenPoint(worldFrom);
         Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
-        // Se estiver atrás da câmara, inverte a direção
+        
         if (screen.z < 0f)
         {
             Vector3 to = (worldFrom - _cam.transform.position).normalized;
-            // projeta para frente
+            
             Vector3 forward = _cam.transform.forward;
             Vector3 reflect = Vector3.Reflect(to, forward);
             Vector3 fallback = _cam.transform.position + reflect * 5f;
@@ -187,11 +187,11 @@ public class DamageIndicatorUI : MonoBehaviour
         }
 
         Vector2 delta = (Vector2)screen - center;
-        if (delta.sqrMagnitude < 0.001f) delta = Vector2.up; // default
+        if (delta.sqrMagnitude < 0.001f) delta = Vector2.up; 
 
         dir = delta.normalized;
 
-        // seta a apontar “para fora” (da origem para a borda)
+        
         angleDeg = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f;
     }
 }

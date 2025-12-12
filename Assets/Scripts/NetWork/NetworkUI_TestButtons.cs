@@ -15,7 +15,7 @@ public class NetworkUI_TestButtons : MonoBehaviour
 
     void Start()
     {
-        // Blindagem: remove antes de adicionar para evitar duplicados em recargas
+        
         if (hostButton)
         {
             hostButton.onClick.RemoveListener(StartHost);
@@ -34,7 +34,7 @@ public class NetworkUI_TestButtons : MonoBehaviour
 
         if (NetworkManager.Singleton != null)
         {
-            // Evita subscrição duplicada
+            
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
             NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         }
@@ -81,13 +81,13 @@ public class NetworkUI_TestButtons : MonoBehaviour
         if (serverButton) serverButton.gameObject.SetActive(false);
     }
 
-    // Chamado no SERVIDOR sempre que um cliente se liga (inclui o próprio Host)
+    
     private void OnClientConnected(ulong clientId)
     {
         var nm = NetworkManager.Singleton;
         if (nm == null || !nm.IsServer) return;
 
-        // --- ANTI-CLONE: se já existir PlayerObject para este cliente, não faças nada.
+        
         if (nm.ConnectedClients.TryGetValue(clientId, out var client) &&
             client != null && client.PlayerObject != null)
         {
@@ -95,7 +95,7 @@ public class NetworkUI_TestButtons : MonoBehaviour
             return;
         }
 
-        // Spawn manual
+        
         SpawnPlayer(clientId);
     }
 
@@ -116,7 +116,7 @@ public class NetworkUI_TestButtons : MonoBehaviour
             return;
         }
 
-        // true => despawn automático quando o dono sai
+        
         netObj.SpawnAsPlayerObject(clientId, true);
         Debug.Log($"Jogador spawnado para Client {clientId}");
     }

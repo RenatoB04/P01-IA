@@ -11,7 +11,7 @@ public class LocalPlayerVisualHider : MonoBehaviour
 
     void Start()
     {
-        // Single-player: este player é sempre o local
+        
         if (targetRenderers == null || targetRenderers.Length == 0)
             targetRenderers = GetComponentsInChildren<Renderer>(true);
 
@@ -21,18 +21,18 @@ public class LocalPlayerVisualHider : MonoBehaviour
 
             if (shadowsOnly)
             {
-                // Aparece sombra mas não a malha
+                
                 r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
             }
             else
             {
-                // Invisível total
+                
                 r.enabled = false;
             }
         }
     }
 
-    // Se o script for desativado, repõe a visibilidade normal
+    
     void OnDisable()
     {
         if (targetRenderers == null) return;

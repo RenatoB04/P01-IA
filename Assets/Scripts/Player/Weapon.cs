@@ -7,7 +7,7 @@ using static UnityEngine.Time;
 using Unity.Netcode;
 using System;
 
-// Confirma que o nome da classe é igual ao nome do ficheiro (ex: Weapon.cs -> public class Weapon)
+
 public class Weapon : NetworkBehaviour
 {
     [Header("Refs")]
@@ -30,18 +30,18 @@ public class Weapon : NetworkBehaviour
     [Tooltip("Player: TRUE (só dispara com WeaponConfig). Bot: FALSE (usa campos locais).")]
     [SerializeField] bool requireConfigForFire = true;
 
-    // --- Componentes Internos ---
+    
     WeaponConfig[] allConfigs;
     WeaponConfig activeConfig;
     Component weaponSwitcher;
     CharacterController playerCC;
     private bool isBot = false;
-    private Health ownerHealth; // Para guardar a referência ao nosso Health
+    private Health ownerHealth; 
 
-    // --- NOVO: Referência ao Escudo ---
+    
     private PlayerShield playerShield;
 
-    // --- Estado de Tiro ---
+    
     float nextTimeUnscaled;
     class AmmoState { public int inMag; public int reserve; }
     readonly Dictionary<WeaponConfig, AmmoState> ammoByConfig = new();
@@ -57,10 +57,10 @@ public class Weapon : NetworkBehaviour
         }
         playerCC = GetComponentInParent<CharacterController>();
 
-        // Procura o Health no "root" (no objeto Player principal)
+        
         ownerHealth = GetComponentInParent<Health>();
 
-        // --- NOVO: Obtém o script do Escudo ---
+        
         playerShield = GetComponentInParent<PlayerShield>();
 
         if (ownerHealth == null && requireConfigForFire)
@@ -85,13 +85,13 @@ public class Weapon : NetworkBehaviour
         }
     }
 
-    // --- Lógica de Rede ---
+    
     public override void OnNetworkSpawn()
     {
         if (!IsOwner && !isBot)
         {
-            EnableInputsAndHUD(false); // Desliga inputs
-            this.enabled = false; // Desliga o script
+            EnableInputsAndHUD(false); 
+            this.enabled = false; 
             return;
         }
 
@@ -140,22 +140,22 @@ public class Weapon : NetworkBehaviour
     {
         RefreshActiveConfig(applyImmediately: true);
 
-        // --- INÍCIO DA CORREÇÃO (AGORA VAI) ---
-        // Vamos forçar a chamada ao UpdateHUD() aqui, a cada frame.
-        // Isto garante que assim que o 'AmmoUI.Instance' estiver pronto (não for nulo),
-        // o texto será atualizado, resolvendo o problema de timing (race condition).
+        
+        
+        
+        
         if (requireConfigForFire)
             UpdateHUD();
-        // --- FIM DA CORREÇÃO ---
+        
 
         if (requireConfigForFire && activeConfig == null) return;
 
-        // --- MODIFICADO: Adiciona a verificação do Escudo ---
+        
         bool isDead = ownerHealth && ownerHealth.isDead.Value;
         bool isPaused = PauseMenuManager.IsPaused;
-        bool isShielded = playerShield && playerShield.IsShieldActive.Value; // <-- NOVO
+        bool isShielded = playerShield && playerShield.IsShieldActive.Value; 
 
-        if (isDead || isPaused || isShielded) // <-- MODIFICADO
+        if (isDead || isPaused || isShielded) 
         {
             if (shootAction && shootAction.action.enabled) shootAction.action.Disable();
             if (reloadAction && reloadAction.action.enabled) reloadAction.action.Disable();
@@ -166,7 +166,7 @@ public class Weapon : NetworkBehaviour
             if (shootAction != null && !shootAction.action.enabled) shootAction.action.Enable();
             if (reloadAction != null && !reloadAction.action.enabled) reloadAction.action.Enable();
         }
-        // --- Fim da Modificação ---
+        
 
         if (requireConfigForFire && reloadAction && reloadAction.action.WasPressedThisFrame()) TryReload();
         if (requireConfigForFire && currentAmmo <= 0 && reserveAmmo > 0 && !isReloading) TryReload();
@@ -193,8 +193,8 @@ public class Weapon : NetworkBehaviour
         nextTimeUnscaled = Time.unscaledTime + useFireRate;
         if (requireConfigForFire)
         {
-            // Esta chamada atualiza a UI DEPOIS de disparar.
-            // A que adicionámos em cima atualiza ANTES, garantindo que o valor inicial aparece.
+            
+            
             UpdateHUD();
             if (currentAmmo == 0 && reserveAmmo > 0) TryReload();
         }
@@ -274,9 +274,9 @@ public class Weapon : NetworkBehaviour
     {
         reasonIfInvalid = null;
         GameObject prefab = activeConfig && activeConfig.bulletPrefab ? activeConfig.bulletPrefab : bulletPrefab;
-        if (prefab == null) { /* ... (código de erro) ... */ return null; }
+        if (prefab == null) { return null; }
         var rootNO = prefab.GetComponent<NetworkObject>();
-        if (rootNO == null) { /* ... (código de erro) ... */ return null; }
+        if (rootNO == null) { return null; }
         return prefab;
     }
 
@@ -285,7 +285,7 @@ public class Weapon : NetworkBehaviour
     {
         string invalidReason;
         var prefab = ResolveBulletPrefabServer(out invalidReason);
-        if (prefab == null) { /* ... (código de erro) ... */ return; }
+        if (prefab == null) { return; }
 
         var bullet = Instantiate(prefab, position, Quaternion.LookRotation(direction));
         if (bullet.TryGetComponent<Rigidbody>(out var rb)) rb.linearVelocity = direction * speed;
@@ -301,9 +301,9 @@ public class Weapon : NetworkBehaviour
         if (no != null)
         {
             try { no.Spawn(true); }
-            catch (Exception ex) { /* ... (código de erro) ... */ Destroy(bullet); }
+            catch (Exception ex) { Destroy(bullet); }
         }
-        else { /* ... (código de erro) ... */ Destroy(bullet); }
+        else { Destroy(bullet); }
     }
 
     public void AddReserveAmmo(int amount)
@@ -338,11 +338,11 @@ public class Weapon : NetworkBehaviour
 
     public void UpdateHUD()
     {
-        // Esta função agora é chamada a cada frame (no Update)
-        // e também depois de recarregar e disparar.
+        
+        
 
-        // A verificação 'AmmoUI.Instance != null' é a nossa "porta".
-        // Assim que for verdade, o texto atualiza.
+        
+        
         if (requireConfigForFire && AmmoUI.Instance != null)
         {
             AmmoUI.Instance.Set(currentAmmo, reserveAmmo);
@@ -358,7 +358,7 @@ public class Weapon : NetworkBehaviour
     void RefreshActiveConfig(bool applyImmediately)
     {
         var newCfg = FindActiveConfig();
-        if (newCfg == activeConfig) return; // Esta linha é importante para performance
+        if (newCfg == activeConfig) return; 
         activeConfig = newCfg;
         isReloading = false;
 
@@ -383,8 +383,8 @@ public class Weapon : NetworkBehaviour
             currentAmmo = st.inMag;
             reserveAmmo = st.reserve;
 
-            // Esta chamada é a original, que falhava por causa do timing.
-            // Agora serve como "backup", mas a chamada no Update() é a que resolve.
+            
+            
             UpdateHUD();
         }
 

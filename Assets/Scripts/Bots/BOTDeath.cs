@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
-using Unity.Netcode; // <-- LINHA ADICIONADA
+using Unity.Netcode; 
 
 public class BOTDeath : MonoBehaviour
 {
@@ -28,10 +28,10 @@ public class BOTDeath : MonoBehaviour
     [Tooltip("Desativar NavMeshAgent ao morrer.")]
     public bool disableNavMeshAgentOnDeath = true;
 
-    // Evento por bot (para scripts no mesmo GameObject)
+    
     public event Action<BOTDeath> OnDied;
 
-    // Evento global (usado pelo BotSpawner_Proto)
+    
     public static event Action OnAnyBotKilled;
 
     bool hasDied = false;
@@ -46,7 +46,7 @@ public class BOTDeath : MonoBehaviour
         }
     }
 
-    // ---------- FUNÇÃO MODIFICADA ----------
+    
     bool IsHealthDead()
     {
         if (!health || string.IsNullOrEmpty(isDeadField))
@@ -54,29 +54,29 @@ public class BOTDeath : MonoBehaviour
 
         var type = health.GetType();
 
-        // Tenta campo (para NetworkVariable<bool> e bool normal)
+        
         var field = type.GetField(isDeadField);
         if (field != null)
         {
-            // Se for um bool normal
+            
             if (field.FieldType == typeof(bool))
             {
                 return (bool)field.GetValue(health);
             }
 
-            // --- CORREÇÃO ADICIONADA ---
-            // Se for uma NetworkVariable<bool>
+            
+            
             if (field.FieldType == typeof(NetworkVariable<bool>))
             {
-                // Pede o valor de dentro da NetworkVariable
+                
                 var netVar = (NetworkVariable<bool>)field.GetValue(health);
                 if (netVar != null)
                     return netVar.Value;
             }
-            // --- FIM DA CORREÇÃO ---
+            
         }
 
-        // Tenta propriedade (para bool normal)
+        
         var prop = type.GetProperty(isDeadField);
         if (prop != null && prop.PropertyType == typeof(bool))
         {
@@ -86,14 +86,14 @@ public class BOTDeath : MonoBehaviour
         Debug.LogWarning($"[BOTDeath] Não foi possível encontrar o campo/propriedade '{isDeadField}' do tipo 'bool' ou 'NetworkVariable<bool>' no script '{health.GetType().Name}'.");
         return false;
     }
-    // ---------- FIM DA MODIFICAÇÃO ----------
+    
 
     public void HandleDeath()
     {
-        if (hasDied) return; // Evita chamadas múltiplas
+        if (hasDied) return; 
         hasDied = true;
 
-        // desativar componentes que não interessam depois de morto
+        
         if (disableColliderOnDeath)
         {
             foreach (var col in GetComponentsInChildren<Collider>())
@@ -112,11 +112,11 @@ public class BOTDeath : MonoBehaviour
             if (agent) agent.enabled = false;
         }
 
-        // notificar listeners
+        
         try { OnDied?.Invoke(this); } catch { }
         try { OnAnyBotKilled?.Invoke(); } catch { }
 
-        // iniciar desaparecimento
+        
         StartCoroutine(Disappear());
     }
 

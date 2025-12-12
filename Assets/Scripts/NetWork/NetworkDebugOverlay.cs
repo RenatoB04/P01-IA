@@ -4,12 +4,12 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 
 #if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem; // Para suportar o novo Input System
+using UnityEngine.InputSystem; 
 #endif
 
 public class NetworkDebugOverlay : MonoBehaviour
 {
-    [SerializeField] private TextMeshProUGUI debugText;   // arrasta aqui o TMP se quiseres
+    [SerializeField] private TextMeshProUGUI debugText;   
     [SerializeField] private KeyCode toggleKey = KeyCode.F3;
 
     private bool visible = true;
@@ -19,21 +19,21 @@ public class NetworkDebugOverlay : MonoBehaviour
 
     void Awake()
     {
-        // Auto-liga se não tiver referência no Inspector
+        
         if (!debugText) debugText = GetComponent<TextMeshProUGUI>();
         if (!debugText) debugText = GetComponentInChildren<TextMeshProUGUI>(true);
     }
 
     void Start()
     {
-        // Arranca visível e faz um primeiro texto
+        
         if (debugText) debugText.enabled = visible;
         ForceRefreshNow();
     }
 
     void Update()
     {
-        // --- TOGGLE (funciona com New Input System e Legacy) ---
+        
         bool pressed = false;
 
 #if ENABLE_INPUT_SYSTEM
@@ -53,7 +53,7 @@ public class NetworkDebugOverlay : MonoBehaviour
 
         if (!visible || !debugText) return;
 
-        // FPS (média por segundo)
+        
         frames++;
         fpsTimer += Time.unscaledDeltaTime;
         if (fpsTimer >= 1f)
@@ -63,7 +63,7 @@ public class NetworkDebugOverlay : MonoBehaviour
             fpsTimer = 0f;
         }
 
-        // Ping
+        
         ulong ping = 0;
         if (NetworkManager.Singleton && NetworkManager.Singleton.IsClient)
         {
@@ -71,7 +71,7 @@ public class NetworkDebugOverlay : MonoBehaviour
             ping = transport.GetCurrentRtt(NetworkManager.ServerClientId);
         }
 
-        // Loss
+        
         string loss = "-";
         if (LossProbe.Instance)
         {
@@ -79,7 +79,7 @@ public class NetworkDebugOverlay : MonoBehaviour
             if (v >= 0f) loss = v.ToString("F1") + " %";
         }
 
-        // Texto
+        
         debugText.text = $"PING: {ping} ms\nLOSS: {loss}\nFPS: {fps:F0}";
     }
 

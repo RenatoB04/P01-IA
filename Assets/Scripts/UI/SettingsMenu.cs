@@ -24,7 +24,7 @@ public class SettingsMenu : MonoBehaviour
 
     private void Awake()
     {
-        // Configurar botões
+        
         if (openSettingsButton != null)
             openSettingsButton.onClick.AddListener(() => settingsPanel.SetActive(true));
 
@@ -37,7 +37,7 @@ public class SettingsMenu : MonoBehaviour
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
 
-        // Tenta encontrar o Character activo e obter a interface da câmara
+        
         Character playerCharacter = FindObjectOfType<Character>();
         if (playerCharacter != null)
             currentCameraLook = playerCharacter as ICameraLook;
@@ -45,7 +45,7 @@ public class SettingsMenu : MonoBehaviour
         CarregarResolucoes();
         CarregarOpcoesGuardadas();
 
-        // Ligação automática dos eventos dos sliders e dropdowns
+        
         resolutionsDropdown.onValueChanged.AddListener(OnResolutionChanged);
         sensitivitySlider.onValueChanged.AddListener(OnSensitivityChanged);
     }

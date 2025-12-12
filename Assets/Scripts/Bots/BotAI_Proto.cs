@@ -25,7 +25,7 @@ public class BotAI_Proto : NetworkBehaviour
     public Animator animator;
     public BotCombat combat;
 
-    // Campos de leitura de vida (compatibilidade)
+    
     public MonoBehaviour healthSource;
     public string healthCurrentField = "currentHealth";
     public string healthMaxField = "maxHealth";
@@ -46,7 +46,7 @@ public class BotAI_Proto : NetworkBehaviour
 
     [Header("Otimização (NOVO)")]
     [Tooltip("Intervalo em segundos entre verificações de Raycast de visão.")]
-    public float visionCheckInterval = 0.2f; // ~5 vezes por segundo
+    public float visionCheckInterval = 0.2f; 
 
     [Header("Combate")]
     public float idealCombatDistance = 10f;
@@ -64,7 +64,7 @@ public class BotAI_Proto : NetworkBehaviour
     public static List<BotAI_Proto> allBots = new List<BotAI_Proto>();
     public float alertRadius = 25f;
 
-    // --- Interno ---
+    
     NavMeshAgent agent;
     Transform currentTarget;
     bool isDead = false;
@@ -76,7 +76,7 @@ public class BotAI_Proto : NetworkBehaviour
     float timeSinceLastSeen;
     float targetSearchTimer = 0f;
 
-    // Variáveis de Otimização
+    
     float visionTimer = 0f;
     bool cachedVisibility = false;
 
@@ -110,7 +110,7 @@ public class BotAI_Proto : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // A IA corre apenas no servidor
+        
         if (!IsServer)
         {
             enabled = false;
@@ -123,7 +123,7 @@ public class BotAI_Proto : NetworkBehaviour
     {
         if (!IsServer || !agent || !agent.isOnNavMesh) return;
 
-        // Verificar morte
+        
         var health = GetComponent<Health>();
         if (health != null && health.isDead.Value)
         {
@@ -135,7 +135,7 @@ public class BotAI_Proto : NetworkBehaviour
             return;
         }
 
-        // 1. Procurar Jogador (a cada 0.5s)
+        
         targetSearchTimer += Time.deltaTime;
         if (targetSearchTimer > 0.5f)
         {
@@ -143,7 +143,7 @@ public class BotAI_Proto : NetworkBehaviour
             targetSearchTimer = 0f;
         }
 
-        // 2. Decisão de Estado e Visão Otimizada
+        
         float health01 = GetHealth01();
         bool lowHealth = health01 > 0f && health01 <= lowHealthThreshold;
 
@@ -155,13 +155,13 @@ public class BotAI_Proto : NetworkBehaviour
             lowAmmo = ammo01 <= lowAmmoThreshold;
         }
 
-        // LÓGICA DE VISÃO OTIMIZADA
+        
         float distToPlayer = Mathf.Infinity;
         if (currentTarget)
         {
             distToPlayer = Vector3.Distance(transform.position, currentTarget.position);
             
-            // Só executa o Raycast pesado se o timer permitir
+            
             visionTimer += Time.deltaTime;
             if (visionTimer >= visionCheckInterval)
             {
@@ -186,7 +186,7 @@ public class BotAI_Proto : NetworkBehaviour
             timeSinceLastSeen += Time.deltaTime;
         }
 
-        // Prioridades e Transições
+        
         if (lowHealth)
         {
             if (currentState != BotState.Retreat) ChangeState(BotState.Retreat);
@@ -206,7 +206,7 @@ public class BotAI_Proto : NetworkBehaviour
             }
             else
             {
-                // Perdeu visão
+                
                 if (timeSinceLastSeen > 0f && timeSinceLastSeen <= maxSearchTime &&
                     (currentState == BotState.Chase || currentState == BotState.Attack))
                 {
@@ -220,7 +220,7 @@ public class BotAI_Proto : NetworkBehaviour
             }
         }
 
-        // 3. Execução
+        
         switch (currentState)
         {
             case BotState.Patrol: TickPatrol(); break;
@@ -275,7 +275,7 @@ public class BotAI_Proto : NetworkBehaviour
         if (combat) combat.SetTarget(currentTarget);
     }
 
-    // --- ESTADOS ---
+    
 
     void TickPatrol()
     {
@@ -393,21 +393,21 @@ public class BotAI_Proto : NetworkBehaviour
         if (combat) combat.SetInCombat(false);
     }
 
-    // --- UTILITÁRIOS ---
+    
 
-    // Método renomeado para "CheckVisibilityPhysics" para ser claro
+    
     bool CheckVisibilityPhysics(float distToPlayer)
     {
         if (!currentTarget) return false;
         if (distToPlayer > viewRadius) return false;
 
         Vector3 origin = eyes.position;
-        // Aponta ligeiramente acima (1.0f) para evitar colisões com chão/joelhos
+        
         Vector3 targetPos = currentTarget.position + Vector3.up * 1.0f;
         Vector3 dir = (targetPos - origin);
         float dist = dir.magnitude;
 
-        // O Raycast pesado que estamos a limitar
+        
         if (Physics.Raycast(origin, dir.normalized, out RaycastHit hit, dist, obstacleMask, QueryTriggerInteraction.Ignore))
         {
             if (hit.collider.transform != currentTarget && hit.collider.transform.root != currentTarget)

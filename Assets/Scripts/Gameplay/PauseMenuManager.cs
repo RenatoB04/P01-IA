@@ -24,7 +24,7 @@ public class PauseMenuManager : MonoBehaviour
 
     void Start()
     {
-        // RESET global ao entrar na cena do jogo
+        
         IsPaused   = false;
         isMenuOpen = false;
 
@@ -62,7 +62,7 @@ public class PauseMenuManager : MonoBehaviour
         Cursor.lockState = isMenuOpen ? CursorLockMode.None : CursorLockMode.Locked;
         Cursor.visible   = isMenuOpen;
 
-        // encontra PlayerInput do jogador local (uma vez)
+        
         if (localInput == null)
         {
             var localPlayer = FindLocalPlayer();
@@ -70,11 +70,11 @@ public class PauseMenuManager : MonoBehaviour
                 localInput = localPlayer.GetComponentInChildren<PlayerInput>();
         }
 
-        // em pausa: desativa totalmente o PlayerInput; fora de pausa: ativa
+        
         if (localInput)
             localInput.enabled = !isMenuOpen;
 
-        // focar o botão Resume quando abre (bom para teclado/manete)
+        
         if (isMenuOpen && btnResume && EventSystem.current)
             EventSystem.current.SetSelectedGameObject(btnResume.gameObject);
     }
@@ -112,7 +112,7 @@ public class PauseMenuManager : MonoBehaviour
 
     void OnClientDisconnected(ulong clientId)
     {
-        // se fores cliente e o host cair → volta ao lobby
+        
         if (!NetworkManager.Singleton.IsServer && clientId == 0)
         {
             Debug.Log("[PauseMenu] Host caiu. A voltar ao lobby...");
@@ -139,7 +139,7 @@ public class PauseMenuManager : MonoBehaviour
         if (btnQuit)       btnQuit.onClick.RemoveAllListeners();
     }
 
-    // garante EventSystem com InputSystemUIInputModule (New Input System)
+    
     void EnsureEventSystem()
     {
         var es = FindObjectOfType<EventSystem>();

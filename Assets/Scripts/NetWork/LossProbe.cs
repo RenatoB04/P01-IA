@@ -6,8 +6,8 @@ public class LossProbe : NetworkBehaviour
 {
     public static LossProbe Instance { get; private set; }
 
-    [SerializeField] float interval = 0.5f;   // de quanto em quanto tempo envio um “ping”
-    [SerializeField] float window = 10f;    // janela para cálculo da % (segundos)
+    [SerializeField] float interval = 0.5f;   
+    [SerializeField] float window = 10f;    
 
     public float CurrentLossPercent { get; private set; } = -1f;
 
@@ -25,7 +25,7 @@ public class LossProbe : NetworkBehaviour
     {
         if (!NetworkManager.Singleton || !NetworkManager.Singleton.IsListening) return;
 
-        // Host/Server não mede loss para si próprio -> 0
+        
         if (IsServer && !IsClient) { CurrentLossPercent = 0f; return; }
         if (IsServer && IsClient) { CurrentLossPercent = 0f; return; }
 
@@ -33,18 +33,18 @@ public class LossProbe : NetworkBehaviour
         if (_timer >= interval)
         {
             _timer = 0f;
-            // envia um “ping” com seqId ao servidor
+            
             _seq++;
             SendProbeServerRpc(_seq);
             sent.Enqueue((Time.unscaledTime, _seq));
         }
 
-        // remove itens fora da janela
+        
         float cutoff = Time.unscaledTime - window;
         while (sent.Count > 0 && sent.Peek().time < cutoff) sent.Dequeue();
         while (echoed.Count > 0 && echoed.Peek().time < cutoff) echoed.Dequeue();
 
-        // calcula % (se não há amostras ainda, mostra -)
+        
         if (sent.Count > 0)
         {
             int s = sent.Count;
@@ -61,7 +61,7 @@ public class LossProbe : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void SendProbeServerRpc(ulong seq, ServerRpcParams rpcParams = default)
     {
-        // ecoa de volta para o cliente que enviou
+        
         var target = new ClientRpcParams
         {
             Send = new ClientRpcSendParams { TargetClientIds = new[] { rpcParams.Receive.SenderClientId } }
@@ -72,7 +72,7 @@ public class LossProbe : NetworkBehaviour
     [ClientRpc]
     void EchoClientRpc(ulong seq, ClientRpcParams rpcParams = default)
     {
-        // regista que recebemos eco deste seq
+        
         echoed.Enqueue((Time.unscaledTime, seq));
     }
 }

@@ -29,14 +29,14 @@ public class BotSpawner_Proto : MonoBehaviour
     private int currentAliveBots = 0;
     private bool isSpawningActive = false;
 
-    // Ciclo de Vida
+    
     void Awake()
     {
-        // Se NÃO forçarmos no editor E a flag "OfflineMode" não estiver ativa, desliga-se.
+        
         if (!forceSpawnInEditor && PlayerPrefs.GetInt("OfflineMode", 0) != 1)
         {
-            // Mas se estivermos num build multiplayer, queremos que continue a tentar
-            // Por isso não desativamos já, deixamos o Start decidir com o Netcode.
+            
+            
         }
     }
 
@@ -47,13 +47,13 @@ public class BotSpawner_Proto : MonoBehaviour
 
     IEnumerator WaitForServer()
     {
-        // Espera até o Netcode arrancar
+        
         yield return new WaitUntil(() => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening);
 
-        // Só o Servidor (Host Offline ou Host Online) pode spawnar
+        
         if (NetworkManager.Singleton.IsServer)
         {
-            // Verificação extra para não spawnar em MP se não quisermos
+            
             bool isOfflineMode = PlayerPrefs.GetInt("OfflineMode", 0) == 1;
             
             if (!isOfflineMode && !enableInMultiplayer && !forceSpawnInEditor)
@@ -66,10 +66,10 @@ public class BotSpawner_Proto : MonoBehaviour
             Debug.Log("[BotSpawner] SOU O HOST. A iniciar ronda de bots...");
             isSpawningActive = true;
             
-            // Subscrever mortes
+            
             BOTDeath.OnAnyBotKilled += HandleBotDeath;
 
-            // Spawn Inicial
+            
             for (int i = 0; i < initialBotCount; i++)
             {
                 SpawnBot();
@@ -78,7 +78,7 @@ public class BotSpawner_Proto : MonoBehaviour
         }
         else
         {
-            // Sou Cliente, fico quieto
+            
             enabled = false;
         }
     }
@@ -88,7 +88,7 @@ public class BotSpawner_Proto : MonoBehaviour
         BOTDeath.OnAnyBotKilled -= HandleBotDeath;
     }
 
-    // --- Lógica HIDRA: Matas 1, Nascem 2 ---
+    
     void HandleBotDeath()
     {
         if (!isSpawningActive) return;
@@ -118,17 +118,17 @@ public class BotSpawner_Proto : MonoBehaviour
         if (botPrefab == null || spawnPoints == null || spawnPoints.Length == 0) return;
         if (!NetworkManager.Singleton.IsServer) return;
 
-        // Escolhe posição aleatória
+        
         Transform sp = spawnPoints[Random.Range(0, spawnPoints.Length)];
         
-        // Instancia
+        
         GameObject bot = Instantiate(botPrefab, sp.position, sp.rotation);
         
-        // Configura IA
+        
         var ai = bot.GetComponent<BotAI_Proto>();
         if (ai != null) ai.patrolPoints = patrolWaypoints;
 
-        // SPAWN NA REDE
+        
         var netObj = bot.GetComponent<NetworkObject>();
         if (netObj != null)
         {
@@ -142,6 +142,6 @@ public class BotSpawner_Proto : MonoBehaviour
         }
     }
     
-    // Compatibilidade com scripts antigos
+    
     public void ScheduleRespawn(Transform[] t) { }
 }

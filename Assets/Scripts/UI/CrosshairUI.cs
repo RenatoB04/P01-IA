@@ -19,11 +19,11 @@ public class CrosshairUI : MonoBehaviour
     public float baseGap = 8f;
 
     [Header("Dynamics")]
-    public float kickPerShot = 8f;     // quanto abre ao disparar
+    public float kickPerShot = 8f;     
     public float maxKick = 30f;
-    public float relaxSpeed = 30f;     // velocidade para fechar
-    public float moveKick = 6f;        // (opcional) abre ao mover/correr
-    public float aimDownSightsScale = 0.7f; // reduzir no ADS (se quiseres ligar por script)
+    public float relaxSpeed = 30f;     
+    public float moveKick = 6f;        
+    public float aimDownSightsScale = 0.7f; 
 
     [Header("Hitmarker")]
     public Image dotImage;
@@ -47,14 +47,14 @@ public class CrosshairUI : MonoBehaviour
 
     void Update()
     {
-        // relaxar o spread
+        
         if (currentKick > 0f)
         {
             currentKick = Mathf.Max(0f, currentKick - relaxSpeed * Time.unscaledDeltaTime);
             ApplyGeometry();
         }
 
-        // hit flash
+        
         if (hitTimer > 0f)
         {
             hitTimer -= Time.unscaledDeltaTime;
@@ -105,7 +105,7 @@ public class CrosshairUI : MonoBehaviour
         if (right) right.gameObject.SetActive(on);
     }
 
-    // ---- API pública ----
+    
     public void Kick(float amount = -1f)
     {
         float add = (amount > 0f) ? amount : kickPerShot;

@@ -25,9 +25,9 @@ public class FP_Controller_IS : NetworkBehaviour
     [SerializeField] InputActionReference sprint;
     [SerializeField] InputActionReference crouch;
 
-    // ===================================================================
-    // ===== ESTE É O BLOCO DE CÓDIGO QUE EU ME ESQUECI DE COPIAR =====
-    // ===================================================================
+    
+    
+    
     [Header("Velocidades")]
     public float walkSpeed = 6.5f;
     public float sprintSpeed = 10f;
@@ -59,40 +59,40 @@ public class FP_Controller_IS : NetworkBehaviour
     float cameraRootBaseY;
     float stepOffsetOriginal;
     bool isCrouching;
-    // ===================================================================
-    // ===== FIM DO BLOCO ESQUECIDO =====
-    // ===================================================================
+    
+    
+    
 
     [Header("Habilidades")]
-    [SerializeField] InputActionReference shieldAction; // (Q)
-    [SerializeField] InputActionReference pulseAction; // (E)
+    [SerializeField] InputActionReference shieldAction; 
+    [SerializeField] InputActionReference pulseAction; 
 
-    private PlayerShield playerShield; // (Este é o script que controla as habilidades)
+    private PlayerShield playerShield; 
     private Health playerHealth;
 
 
-    // --- NETWORK ---
+    
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
-        // refs
+        
         if (!playerInput) playerInput = GetComponent<PlayerInput>();
         if (!cc) cc = GetComponent<CharacterController>();
         if (!playerCamera) playerCamera = GetComponentInChildren<Camera>(true);
         if (!audioListener) audioListener = GetComponentInChildren<AudioListener>(true);
 
-        // 1) SERVIDOR escolhe spawn e avisa o DONO (ClientRpc)
+        
         if (IsServer && SpawnsManager.I != null)
         {
             SpawnsManager.I.GetNext(out var pos, out var rot);
 
-            // server posiciona para os outros verem logo algo
+            
             if (cc) cc.enabled = false;
             transform.SetPositionAndRotation(pos, rot);
             if (cc) cc.enabled = true;
 
-            // manda ao dono aplicar localmente (client-authoritative)
+            
             var target = new ClientRpcParams
             {
                 Send = new ClientRpcSendParams
@@ -103,7 +103,7 @@ public class FP_Controller_IS : NetworkBehaviour
             SetSpawnClientRpc(pos, rot, target);
         }
 
-        // 2) Ativar/desativar componentes conforme ownership
+        
         ApplyOwnershipState(IsOwner);
 
         if (IsOwner && cameraRoot != null)
@@ -121,7 +121,7 @@ public class FP_Controller_IS : NetworkBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        // garantir que estamos no action map do jogador
+        
         if (playerInput && playerInput.actions != null)
         {
             var map = playerInput.actions.FindActionMap("Player", true);
@@ -143,7 +143,7 @@ public class FP_Controller_IS : NetworkBehaviour
         if (playerCamera) playerCamera.enabled = owner;
         if (audioListener) audioListener.enabled = owner;
         if (playerInput) playerInput.enabled = owner;
-        // o CC pode ser reativado no Update caso algo o desligue
+        
         if (cc && owner && !cc.enabled) cc.enabled = true;
         if (cc && !owner) cc.enabled = false;
     }
@@ -154,21 +154,21 @@ public class FP_Controller_IS : NetworkBehaviour
         animator = GetComponentInChildren<Animator>();
         playerInput = GetComponent<PlayerInput>();
         
-        // As nossas novas referências
+        
         playerShield = GetComponent<PlayerShield>(); 
         playerHealth = GetComponent<Health>();
 
         if (!playerCamera) playerCamera = GetComponentInChildren<Camera>(true);
         if (!audioListener) audioListener = GetComponentInChildren<AudioListener>(true);
 
-        // Isto é o que estava a dar erro (porque as variáveis não existiam)
+        
         originalHeight = cc.height;
         stepOffsetOriginal = cc.stepOffset;
 
         if (cameraRoot) cameraRootBaseY = cameraRoot.localPosition.y;
         else Debug.LogWarning("FP_Controller_IS: Arrasta o CameraRoot no Inspector.");
 
-        // CC robusto
+        
         cc.minMoveDistance = 0f;
         cc.slopeLimit = Mathf.Max(cc.slopeLimit, 45f);
         cc.stepOffset = Mathf.Max(cc.stepOffset, 0.3f);
@@ -192,7 +192,7 @@ public class FP_Controller_IS : NetworkBehaviour
         if (sprint) sprint.action.Enable();
         if (crouch) crouch.action.Enable();
         
-        // Ativar as nossas ações
+        
         if (shieldAction) shieldAction.action.Enable();
         if (pulseAction) pulseAction.action.Enable();
 
@@ -208,7 +208,7 @@ public class FP_Controller_IS : NetworkBehaviour
         if (sprint) sprint.action.Disable();
         if (crouch) crouch.action.Disable();
         
-        // Desativar as nossas ações
+        
         if (shieldAction) shieldAction.action.Disable();
         if (pulseAction) pulseAction.action.Disable();
 
@@ -219,7 +219,7 @@ public class FP_Controller_IS : NetworkBehaviour
         }
     }
 
-    // --- Update (Modificado com os inputs das habilidades) ---
+    
     void Update()
     {
         if (!IsOwner) return;
@@ -228,13 +228,13 @@ public class FP_Controller_IS : NetworkBehaviour
 
         bool shieldActive = (playerShield != null && playerShield.IsShieldActive.Value);
 
-        // LOOK
+        
         Vector2 lookDelta = look ? look.action.ReadValue<Vector2>() : Vector2.zero;
         xRot = Mathf.Clamp(xRot - lookDelta.y * sens, -85f, 85f);
         if (cameraRoot) cameraRoot.localRotation = Quaternion.Euler(xRot, 0f, 0f);
         transform.Rotate(Vector3.up * (lookDelta.x * sens));
         
-        // Input do Escudo (Q)
+        
         if (shieldAction != null && shieldAction.action.WasPressedThisFrame())
         {
             if (playerHealth == null || !playerHealth.isDead.Value)
@@ -243,18 +243,18 @@ public class FP_Controller_IS : NetworkBehaviour
             }
         }
         
-        // Input do Pulso (E)
+        
         if (pulseAction != null && pulseAction.action.WasPressedThisFrame())
         {
-            // Não deixa ativar se estiver morto
+            
             if (playerHealth == null || !playerHealth.isDead.Value)
             {
-                // Envia o pedido ao servidor
+                
                 playerShield?.RequestPulseServerRpc();
             }
         }
 
-        // CROUCH
+        
         if (crouch && crouch.action.WasPressedThisFrame()) isCrouching = !isCrouching;
         float targetHeight = isCrouching ? crouchHeight : originalHeight;
         float targetCenterY = targetHeight * 0.5f;
@@ -269,7 +269,7 @@ public class FP_Controller_IS : NetworkBehaviour
             cameraRoot.localPosition = camLocal;
         }
 
-        // MOVIMENTO
+        
         Vector2 m = move ? move.action.ReadValue<Vector2>() : Vector2.zero;
         Vector3 inputDir = (transform.right * m.x + transform.forward * m.y);
         if (inputDir.sqrMagnitude > 1f) inputDir.Normalize();
@@ -291,7 +291,7 @@ public class FP_Controller_IS : NetworkBehaviour
             animator.SetBool("isCrouching", isCrouching);
         }
         
-        // SALTO
+        
         if (canJump && jump != null && jump.action.WasPressedThisFrame() && !isCrouching) 
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
@@ -311,7 +311,7 @@ public class FP_Controller_IS : NetworkBehaviour
         groundedPrev = groundedNow;
     }
 
-    // --- recebe do servidor a posição do spawn e aplica localmente (apenas no dono) ---
+    
     [ClientRpc]
     public void SetSpawnClientRpc(Vector3 pos, Quaternion rot, ClientRpcParams rpcParams = default)
     {

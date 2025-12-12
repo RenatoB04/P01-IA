@@ -39,7 +39,7 @@ public class RespawnUIManager : MonoBehaviour
 
     private IEnumerator FindLocalPlayer()
     {
-        // Espera até encontrar o NetworkManager e o Jogador
+        
         while (NetworkManager.Singleton == null ||
                NetworkManager.Singleton.LocalClient == null ||
                NetworkManager.Singleton.LocalClient.PlayerObject == null)
@@ -57,7 +57,7 @@ public class RespawnUIManager : MonoBehaviour
         {
             Debug.Log($"[UI CHECK] Script de Vida encontrado! Está morto agora? {localHealth.isDead.Value}");
 
-            // Subscreve para saber quando morre
+            
             localHealth.isDead.OnValueChanged += OnPlayerDeathChanged;
 
             if (localHealth.isDead.Value) ShowDeathScreen();

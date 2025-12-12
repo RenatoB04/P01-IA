@@ -1,6 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
-using System.Collections; // Necessário para Coroutines
+using System.Collections; 
 
 [RequireComponent(typeof(PlayerDeathAndRespawn))]
 public class NetworkSpawnHandler : NetworkBehaviour
@@ -21,23 +21,23 @@ public class NetworkSpawnHandler : NetworkBehaviour
     {
         base.OnNetworkSpawn();
         
-        // Apenas o dono (jogador local) pede ao servidor o spawn inicial.
+        
         if (IsOwner && respawnController != null)
         {
-            // Pequeno atraso de 1 frame para garantir que RPCs estão registados.
+            
             StartCoroutine(SafeRespawnCoroutine());
         }
     }
     
     private IEnumerator SafeRespawnCoroutine()
     {
-        // Espera 1 frame
+        
         yield return null; 
         
         if (IsSpawned && respawnController != null)
         {
             Debug.Log("[SpawnHandler] A chamar RespawnServerRpc(ignoreAliveCheck: true) para spawn inicial...");
-            // true = ignorar o check de morto e usar logo os spawn points
+            
             respawnController.RespawnServerRpc(true);
         }
     }

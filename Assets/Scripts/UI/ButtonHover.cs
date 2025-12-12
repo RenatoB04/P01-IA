@@ -21,7 +21,7 @@ public class UIButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHa
         audioSource = GetComponent<AudioSource>();
         audioSource.playOnAwake = false;
         audioSource.loop = false;
-        audioSource.volume = 1f; // assegura volume audível
+        audioSource.volume = 1f; 
     }
 
     void Start()
@@ -40,12 +40,12 @@ public class UIButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHa
             return;
         }
 
-        // Para qualquer som que ainda esteja a tocar noutro botão
+        
         if (currentHoverSource != null && currentHoverSource.isPlaying)
             currentHoverSource.Stop();
 
-        // Toca o som e define este como o som ativo
-        audioSource.Stop(); // garante reinício imediato
+        
+        audioSource.Stop(); 
         audioSource.PlayOneShot(hoverSound);
         currentHoverSource = audioSource;
     }

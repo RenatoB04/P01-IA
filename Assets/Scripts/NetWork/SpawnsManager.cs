@@ -1,5 +1,5 @@
 using UnityEngine;
-using Unity.Netcode;   // <- IMPORTANTE
+using Unity.Netcode;   
 
 public class SpawnsManager : MonoBehaviour
 {
@@ -24,7 +24,7 @@ public class SpawnsManager : MonoBehaviour
         rot = t.rotation;
     }
 
-    // (se tiveres este método a ser chamado noutro lado)
+    
     public void Place(NetworkObject playerObj)
     {
         GetNext(out var pos, out var rot);

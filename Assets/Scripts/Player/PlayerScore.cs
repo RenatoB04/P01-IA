@@ -13,7 +13,7 @@ public class PlayerScore : NetworkBehaviour
     public NetworkVariable<int> Score = new NetworkVariable<int>(
         0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    // Eventos locais para HUD
+    
     public UnityEvent<int> OnScoreChanged;
     public UnityEvent<int> OnKillsChanged;
 
@@ -32,7 +32,7 @@ public class PlayerScore : NetworkBehaviour
     void HandleKillsChanged(int prev, int curr) => OnKillsChanged?.Invoke(curr);
     void HandleScoreChanged(int prev, int curr) => OnScoreChanged?.Invoke(curr);
 
-    /// <summary>Chamar só no SERVIDOR.</summary>
+    
     public void AwardKillAndPoints()
     {
         if (!IsServer) return;

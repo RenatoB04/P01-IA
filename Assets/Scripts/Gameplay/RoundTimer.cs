@@ -57,7 +57,7 @@ public class RoundTimer : NetworkBehaviour
         if (!IsServer) return;
         isRoundActive.Value = false;
         
-        // --- CÁLCULO DO VENCEDOR (ATUALIZADO PARA NOMES) ---
+        
         string winnerName = "Ninguém";
         int highScore = -1;
 
@@ -71,7 +71,7 @@ public class RoundTimer : NetworkBehaviour
             {
                 highScore = bestPlayer.Score.Value;
                 
-                // TENTA OBTER O NOME REAL DO JOGADOR
+                
                 var nameScript = bestPlayer.GetComponent<PlayerName>();
                 if (nameScript != null)
                 {
@@ -79,7 +79,7 @@ public class RoundTimer : NetworkBehaviour
                 }
                 else
                 {
-                    // Fallback se não tiver o script
+                    
                     winnerName = $"Player {bestPlayer.OwnerClientId}";
                 }
             }

@@ -12,10 +12,10 @@ public class ScoreHUDBinder : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // Só o dono local atualiza a sua própria UI
+        
         if (!IsOwner) { enabled = false; return; }
 
-        // Procura o PlayerScore no mesmo Player (root)
+        
         ps = GetComponentInParent<PlayerScore>();
         if (ps == null)
         {
@@ -24,10 +24,10 @@ public class ScoreHUDBinder : NetworkBehaviour
             return;
         }
 
-        // Bootstrapping (mostrar valores atuais)
+        
         RefreshAll();
 
-        // Subscrever mudanças
+        
         ps.Score.OnValueChanged += OnScoreChanged;
         ps.Kills.OnValueChanged += OnKillsChanged;
     }

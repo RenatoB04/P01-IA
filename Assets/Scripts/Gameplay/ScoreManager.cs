@@ -17,8 +17,8 @@ public class ScoreManager : MonoBehaviour
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
-        // Se quiseres manter entre cenas:
-        // DontDestroyOnLoad(gameObject);
+        
+        
         UpdateUI();
     }
 

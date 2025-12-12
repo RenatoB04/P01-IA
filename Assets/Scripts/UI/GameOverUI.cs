@@ -13,9 +13,9 @@ public class GameOverUI : MonoBehaviour
     [SerializeField] private Button leaveButton;
 
     [Header("Resultados")]
-    [SerializeField] private TextMeshProUGUI statusText; // "FIM DE JOGO"
-    [SerializeField] private TextMeshProUGUI winnerText; // "Vencedor: Player 1"
-    [SerializeField] private TextMeshProUGUI scoreText;  // "Pontos: 1500"
+    [SerializeField] private TextMeshProUGUI statusText; 
+    [SerializeField] private TextMeshProUGUI winnerText; 
+    [SerializeField] private TextMeshProUGUI scoreText;  
 
     void Awake()
     {
@@ -48,7 +48,7 @@ public class GameOverUI : MonoBehaviour
             scoreText.text = $"Pontuação: {finalScore}";
         }
 
-        // Liberta o rato
+        
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }

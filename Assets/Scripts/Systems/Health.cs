@@ -10,7 +10,7 @@ public class Health : NetworkBehaviour
     [Header("Config")]
     public float maxHealth = 100f;
 
-    // --- Variáveis de Rede ---
+    
     public NetworkVariable<float> currentHealth = new NetworkVariable<float>(
         100f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
@@ -32,7 +32,7 @@ public class Health : NetworkBehaviour
     private ulong lastInstigatorClientId = ulong.MaxValue;
     private Coroutine uiFinderCo;
 
-    // --- FIX: Variável para impedir ressurreição instantânea ---
+    
     private float timeOfDeath = 0f;
 
     void Awake()
@@ -47,7 +47,7 @@ public class Health : NetworkBehaviour
         {
             if (team.Value == -1)
             {
-                // Se tiver IA é Bot (-2), se não é Player (ClientId)
+                
                 if (GetComponent<BotAI_Proto>() != null)
                     team.Value = -2;
                 else
@@ -111,26 +111,26 @@ public class Health : NetworkBehaviour
             OnDied?.Invoke();
     }
 
-    // ---------------------------------------------------
-    //                  SISTEMA DE DANO
-    // ---------------------------------------------------
+    
+    
+    
 
     public void ApplyDamageServer(float amount, int instigatorTeam, ulong instigatorClientId, Vector3 hitWorldPos, bool showIndicator = true)
     {
         if (!IsServer) return;
-        if (isDead.Value) return; // Se já morreu, ignora dano
+        if (isDead.Value) return; 
 
         amount = Mathf.Clamp(amount, 0f, maxHealth * 2f);
         if (amount <= 0f) return;
 
-        // 1. Escudo
+        
         if (playerShield != null && playerShield.IsShieldActive.Value)
         {
             amount = playerShield.AbsorbDamageServer(amount);
             if (amount <= 0.01f) return;
         }
 
-        // 2. Friendly Fire
+        
         if (team.Value != -1 && instigatorTeam != -1 && team.Value == instigatorTeam)
             return;
 
@@ -145,7 +145,7 @@ public class Health : NetworkBehaviour
         if (newHealth < oldHealth)
             OnTookDamage?.Invoke(amount, null);
 
-        // 3. Feedback Visual
+        
         if (showIndicator)
         {
             var clientParams = new ClientRpcParams
@@ -155,11 +155,11 @@ public class Health : NetworkBehaviour
             DamageIndicatorClientRpc(hitWorldPos, amount, clientParams);
         }
 
-        // 4. Morte
+        
         if (newHealth <= 0.01f && !isDead.Value)
         {
             isDead.Value = true;
-            // --- FIX: Regista a hora da morte ---
+            
             timeOfDeath = Time.time;
 
             Debug.Log($"[Health] {name} (Team {team.Value}) morreu.");
@@ -191,18 +191,18 @@ public class Health : NetworkBehaviour
         lastInstigatorClientId = ulong.MaxValue;
     }
 
-    // ---------------------------------------------------
-    //                  CURA / RESET
-    // ---------------------------------------------------
+    
+    
+    
 
     public void ResetFullHealth() => ResetHealthServerRpc();
 
     [ServerRpc(RequireOwnership = false)]
     private void ResetHealthServerRpc()
     {
-        // --- FIX CRÍTICO ---
-        // Se tentarem resetar a vida logo após a morte (menos de 2 segundos), BLOQUEIA.
-        // Isto impede que eventos automáticos (OnDied -> Reset) te ressuscitem instantaneamente.
+        
+        
+        
         if (isDead.Value && Time.time < timeOfDeath + 2.0f)
         {
             return;

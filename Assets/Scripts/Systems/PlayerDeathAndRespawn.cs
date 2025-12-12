@@ -27,13 +27,13 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
     [Header("Respawn Config")]
     [SerializeField] private float respawnDelay = 3.0f;
 
-    // Sincroniza a posição inicial do servidor para todos
+    
     private NetworkVariable<Vector3> _networkSpawnPosition = new NetworkVariable<Vector3>(
         Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private Coroutine _respawnCoroutine;
 
-    // Propriedade para outros scripts saberem se estamos vivos
+    
     public bool IsPlayerControlled => IsOwner && health != null && !health.isDead.Value;
 
     [Header("Spawn Points")]
@@ -54,7 +54,7 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         if (!health) health = GetComponentInChildren<Health>();
         if (!rb) rb = GetComponent<Rigidbody>(); 
 
-        // Auto-encontrar visual se falhar o arrasto
+        
         if (!visualRoot) 
         {
             var renderer = GetComponentInChildren<SkinnedMeshRenderer>();
@@ -69,20 +69,20 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
 
         if (IsServer)
         {
-            // Calcular e guardar posição inicial
+            
             var spawn = ResolveSpawnForOwner(OwnerClientId);
             _networkSpawnPosition.Value = spawn.pos;
 
-            // Forçar teleporte inicial
+            
             ForceOwnerTeleportServer(spawn.pos, spawn.rot);
         }
 
-        // Inicializar estado visual e controlo
+        
         if (health != null)
         {
-            // Aplica o estado inicial (se entrou já morto ou vivo)
+            
             HandleControlState(health.isDead.Value, health.isDead.Value);
-            // Subscreve a mudanças futuras
+            
             health.isDead.OnValueChanged += HandleControlState;
         }
 
@@ -125,13 +125,13 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
         if (_uiFinderCo != null) StopCoroutine(_uiFinderCo);
     }
 
-    // --- LÓGICA CENTRAL DE ESTADO (VISUAL + UI + CONTROLO) ---
+    
     private void HandleControlState(bool previousDead, bool currentDead)
     {
-        // 1. Lógica Visual (Para TODOS verem se o boneco existe ou não)
-        ToggleVisuals(!currentDead); // Se dead=true, visuals=false
+        
+        ToggleVisuals(!currentDead); 
 
-        // 2. Lógica Local (UI e Input só para o Dono)
+        
         if (IsOwner)
         {
             if (currentDead)
@@ -140,9 +140,9 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
                 if (_respawnTimerTextInstance != null) _respawnTimerTextInstance.gameObject.SetActive(false);
                 GameplayCursor.Unlock();
                 
-                // Move para longe para não atrapalhar a câmara
-                // (Nota: O Collider já é desligado no ToggleVisuals)
-                //transform.position = deadZonePosition; 
+                
+                
+                
             }
             else
             {
@@ -155,15 +155,15 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
 
     private void ToggleVisuals(bool isActive)
     {
-        // Esconde/Mostra Corpo
+        
         if (visualRoot) visualRoot.SetActive(isActive);
-        // Esconde/Mostra Arma
+        
         if (weaponRoot) weaponRoot.SetActive(isActive);
-        // Liga/Desliga Colisão (para não bloquear balas enquanto morto)
+        
         if (capsuleCollider) capsuleCollider.enabled = isActive;
     }
 
-    // --- LÓGICA DO SERVIDOR ---
+    
 
     [ServerRpc(RequireOwnership = false)]
     public void RespawnServerRpc(bool ignoreAliveCheck = false, ServerRpcParams rpcParams = default)
@@ -187,7 +187,7 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
             UpdateRespawnTimerClientRpc(timer, new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientID } } });
         }
 
-        // 1. Determinar Posição
+        
         var spawnPos = _networkSpawnPosition.Value;
         if (spawnPos == Vector3.zero)
         {
@@ -196,10 +196,10 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
             _networkSpawnPosition.Value = spawnPos;
         }
 
-        // 2. TELEPORTE
+        
         ForceOwnerTeleportServer(spawnPos, Quaternion.identity);
 
-        // 3. Restaurar Vida (Isto vai disparar o HandleControlState via OnValueChanged e reativar os visuais)
+        
         health.ResetFullHealth();
 
         UpdateRespawnTimerClientRpc(0f, new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientID } } });
@@ -243,7 +243,7 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
 
     private IEnumerator TeleportSequence(Vector3 targetPos, Quaternion targetRot, Vector3 targetScale)
     {
-        // Congela Física
+        
         if (capsuleCollider) capsuleCollider.enabled = false;
         if (rb)
         {
@@ -252,17 +252,17 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
             rb.isKinematic = true; 
         }
 
-        // Move
+        
         if (netTransform != null) netTransform.Teleport(targetPos, targetRot, targetScale);
         transform.position = targetPos;
         transform.rotation = targetRot;
 
-        // Espera Frame
+        
         yield return new WaitForEndOfFrame();
         yield return new WaitForFixedUpdate(); 
 
-        // Reativa (SE estiver vivo, a lógica HandleControlState trata do resto, 
-        // mas aqui garantimos que o collider fica pronto para a física se o boneco estiver visível)
+        
+        
         if (netTransform != null) netTransform.Teleport(targetPos, targetRot, targetScale);
         
         if (rb)
@@ -271,12 +271,12 @@ public class PlayerDeathAndRespawn : NetworkBehaviour
             rb.linearVelocity = Vector3.zero; 
         }
         
-        // Só reativa o collider se o boneco não estiver morto
+        
         if (health && !health.isDead.Value && capsuleCollider) 
             capsuleCollider.enabled = true;
     }
 
-    // --- Lógica de Spawn ---
+    
     private Pose ResolveSpawnForOwner(ulong ownerClientId)
     {
         if (spawnPointA == Vector3.zero && spawnPointB == Vector3.zero)

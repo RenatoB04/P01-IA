@@ -1,9 +1,9 @@
 using UnityEngine;
 
-/// <summary>
-/// Garante que o bot tem a arma certa ligada ao "holder"
-/// e configura o BotCombat com o shootPoint da arma.
-/// </summary>
+
+
+
+
 public class BotWeaponAutoAttach : MonoBehaviour
 {
     [Header("Refs")]
@@ -46,18 +46,18 @@ public class BotWeaponAutoAttach : MonoBehaviour
             }
         }
 
-        // Instanciar arma e parentear ao holder
+        
         GameObject weaponInstance = Instantiate(weaponPrefab, weaponHolder);
         weaponInstance.transform.localPosition = Vector3.zero;
         weaponInstance.transform.localRotation = Quaternion.identity;
         weaponInstance.transform.localScale = Vector3.one;
 
-        // Encontrar a ponta do cano para o BotCombat
+        
         if (combat != null)
         {
             Transform muzzle = null;
 
-            // primeiro tenta pelo nome
+            
             if (!string.IsNullOrEmpty(muzzleTransformName))
             {
                 var allChildren = weaponInstance.GetComponentsInChildren<Transform>();
@@ -71,7 +71,7 @@ public class BotWeaponAutoAttach : MonoBehaviour
                 }
             }
 
-            // se não encontrou, usa o próprio holder
+            
             if (!muzzle) muzzle = weaponInstance.transform;
 
             combat.shootPoint = muzzle;

@@ -1,6 +1,6 @@
-// SpawnPointsProvider.cs
-// Coloca este componente numa GameObject da cena (por exemplo "SpawnPointsProvider")
-// e arrasta os dois empties (SP_A e SP_B) para os campos "Spawn A" e "Spawn B".
+
+
+
 
 using System;
 using UnityEngine;
@@ -21,13 +21,13 @@ public class SpawnPointsProvider : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            // Mantém o primeiro provider e evita duplicados.
+            
             Destroy(gameObject);
             return;
         }
         Instance = this;
 
-        // Tentativa de auto-descoberta se os campos estiverem vazios.
+        
         if (autoDiscoverByTag && (spawnA == null || spawnB == null) && !string.IsNullOrEmpty(spawnPointTag))
         {
             var objs = GameObject.FindGameObjectsWithTag(spawnPointTag);
